@@ -8,7 +8,7 @@ $skills = Join-Path $HOME '.claude\skills'
 if (-not (Test-Path (Join-Path $skills 'maquina-de-edicao\SKILL.md'))) { Write-Host 'Instale primeiro a Máquina de Edição com IA Básico.'; exit 1 }
 if (-not (Test-Path (Join-Path $skills 'maquina-de-edicao\referencias\modo-escritorio.md'))) { Write-Host 'Atualize a Máquina de Edição (git pull na pasta do Básico e rode o instalador dele de novo).'; exit 1 }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Host 'Falta o Node.js 22.13 ou mais novo: winget install OpenJS.NodeJS.LTS'; exit 1 }
-node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'
+node -e 'const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'
 if ($LASTEXITCODE -ne 0) { Write-Host 'Seu Node é antigo. Precisa da versão 22.13 ou mais nova.'; exit 1 }
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Write-Host 'Falta o Claude Code. Instale e faça login antes.'; exit 1 }
 
@@ -17,7 +17,7 @@ try {
   npm install --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'npm install falhou' }
   node build.mjs; if ($LASTEXITCODE -ne 0) { throw 'build falhou' }
   New-Item -ItemType Directory -Force $dados | Out-Null
-  $versao = node -p 'require(\"./package.json\").version'
+  $versao = node -p "require('./package.json').version"
   @{ pasta = $pasta; versao = $versao } | ConvertTo-Json | Out-File -Encoding utf8 (Join-Path $dados 'instalacao.json')
   $destino = Join-Path $skills 'escritorio'
   if (Test-Path $destino) {
