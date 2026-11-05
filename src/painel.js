@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { salaDaEtapa } from '../lib/ficha.mjs';
 import { criarPacotes } from './pacote.js';
+import { calcularMovimentos } from './movimentos.js';
 
 const ultimaSala = new Map();
 export function aplicarEstado(ESC, estado, pacotes) {
@@ -11,11 +12,7 @@ export function aplicarEstado(ESC, estado, pacotes) {
     sala.tela.desenhar({ titulo: s.nome, linha: emAndamento?.andamento?.mensagem || s.texto, progresso: emAndamento?.andamento ? emAndamento.andamento.progresso : null });
     pacotes.fila(s.chave, Math.max(0, Math.min(4, s.fila - 1)));
   }
-  for (const v of estado.videos) {
-    const agora = salaDaEtapa(v.etapa), antes = ultimaSala.get(v.id);
-    if (antes && antes !== agora && ESC.salas[antes] && ESC.salas[agora]) pacotes.aoMudar(v.id, antes, agora);
-    ultimaSala.set(v.id, agora);
-  }
+  for (const m of calcularMovimentos(ultimaSala, estado.videos, salaDaEtapa, Object.keys(ESC.salas))) pacotes.aoMudar(m.id, m.de, m.para);
   const antena = ESC.salas.postagem?.decor?.getObjectByName('antena');
   if (antena) antena.material.emissiveIntensity = estado.videos.some(v => v.etapa === 'pronto-pra-postar') ? 1.6 : 0.2;
 }
