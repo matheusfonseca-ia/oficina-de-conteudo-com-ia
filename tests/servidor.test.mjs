@@ -118,3 +118,28 @@ test('two simultaneous /studio calls open the Studio only once', { timeout: 2000
     assert.equal((fs.readFileSync(log, 'utf8').match(/REABRIR_STUDIO/g) || []).length, 1);
   } finally { delete process.env.ESC_TEST_LOG; }
 });
+
+test('Host must name this server: right port on 127.0.0.1 or localhost, anything else is refused', async t => {
+  const { base, app } = await subir(t);
+  const porta = app.server.address().port;
+  const http = await import('node:http');
+  const pedir = host => new Promise(r => http.get(base + '/api/estado', { headers: { host } }, res => { res.resume(); r(res.statusCode); }));
+  assert.equal(await pedir(`127.0.0.1:${porta}`), 200);
+  assert.equal(await pedir(`localhost:${porta}`), 200);
+  assert.equal(await pedir(`localhost:${porta === 1 ? 2 : 1}`), 403);
+  assert.equal(await pedir('localhost'), 403);
+});
+
+test('fechar() stops a running edição without marking the video as failed', { timeout: 20000 }, async t => {
+  const { post, ate, app, dados } = await subir(t);
+  const arqPid = path.join(dados, 'pid'); process.env.ESC_TEST_MODO = 'lento'; process.env.ESC_TEST_PID = arqPid;
+  try {
+    await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': 'e.mp4', 'content-type': 'application/octet-stream' });
+    const e = await ate(e => e.videos[0]?.trabalhando && fs.existsSync(arqPid));
+    const id = e.videos[0].id, pid = Number(fs.readFileSync(arqPid, 'utf8'));
+    await app.fechar();
+    assert.throws(() => process.kill(pid, 0), /ESRCH/);
+    const ficha = JSON.parse(fs.readFileSync(path.join(dados, 'videos', id, 'ficha.json'), 'utf8'));
+    assert.equal(ficha.erro, null); assert.equal(ficha.etapa, 'bruto-recebido');
+  } finally { delete process.env.ESC_TEST_MODO; delete process.env.ESC_TEST_PID; }
+});

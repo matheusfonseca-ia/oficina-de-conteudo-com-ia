@@ -40,3 +40,20 @@ test('listar skips folders with a corrupted ficha.json', () => {
   fs.mkdirSync(s.pasta('ruim')); fs.writeFileSync(path.join(s.pasta('ruim'), 'ficha.json'), '{');
   assert.deepEqual(s.listar(), []);
 });
+
+test('salvar retries a rename blocked for a moment (EPERM/EBUSY/EACCES) and gives up cleanly after 5 tries', () => {
+  const s = new FichasStore(tmp()); s.garantirPastas(); fs.mkdirSync(s.pasta('a'));
+  const original = fs.renameSync; let falhas = 2, chamadas = 0;
+  fs.renameSync = (...a) => { chamadas++; if (falhas-- > 0) throw Object.assign(new Error('ocupado'), { code: chamadas === 1 ? 'EPERM' : 'EBUSY' }); return original(...a); };
+  try {
+    s.salvar(criarFicha({ id: 'a', porta: 'bruto', agora: 1 }));
+    assert.equal(chamadas, 3); assert.equal(s.carregar('a').id, 'a');
+    falhas = 99; chamadas = 0;
+    assert.throws(() => s.salvar(criarFicha({ id: 'a', porta: 'bruto', agora: 2 })), /ocupado/);
+    assert.equal(chamadas, 5);
+    assert.deepEqual(fs.readdirSync(s.pasta('a')), ['ficha.json']); // o .tmp não fica pra trás
+    falhas = 99; chamadas = 0; fs.renameSync = () => { chamadas++; throw Object.assign(new Error('outro'), { code: 'ENOENT' }); };
+    assert.throws(() => s.salvar(criarFicha({ id: 'a', porta: 'bruto', agora: 3 })), /outro/);
+    assert.equal(chamadas, 1); // outros erros não são repetidos
+  } finally { fs.renameSync = original; }
+});

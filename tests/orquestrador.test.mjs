@@ -7,12 +7,14 @@ import { FichasStore } from '../lib/fichas-store.mjs';
 import { Orquestrador } from '../lib/orquestrador.mjs';
 import { criarFicha } from '../lib/ficha.mjs';
 
+const FAKE = path.resolve('tests/fixtures/claude-falso.mjs');
+
 const PULAR = ['pesquisa', 'roteiro', 'capa', 'analise'];
-function montar(runners) {
+function montar(runners, config = {}) {
   const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-orq-'));
   const store = new FichasStore(dados); store.garantirPastas();
   const nova = (id, etapa = 'bruto-recebido') => { fs.mkdirSync(store.pasta(id)); return store.salvar({ ...criarFicha({ id, porta: 'bruto', bruto: 'bruto.mp4', pular: PULAR, agora: 1 }), etapa }); };
-  const o = new Orquestrador({ store, config: {}, cerebroDir: store.cerebroDir, runners });
+  const o = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners });
   return { store, o, nova };
 }
 
@@ -73,4 +75,54 @@ test('andamento exposes the live estado.json of the running edição', async () 
   nova('a'); o.acordar(); await new Promise(r => setTimeout(r, 20));
   assert.equal(o.ocupado('a'), true); assert.deepEqual(o.andamento('a'), { progresso: 0.5, mensagem: 'Cortando' });
   liberar(); await o.esperarOcioso(); assert.equal(o.andamento('a'), null);
+});
+
+test('a store.salvar that throws inside the failure path is not an unhandled rejection; the office keeps working', async () => {
+  const soltas = []; const pegar = e => soltas.push(e); process.on('unhandledRejection', pegar);
+  const erroOriginal = console.error; console.error = () => {};
+  try {
+    let quebrar = true, vezesA = 0;
+    const { store, o, nova } = montar({ edicao: async ({ ficha }) => { if (ficha.id === 'a') { vezesA++; throw new Error('Falta o FFmpeg'); } return { estado: { etapa: 'aguardando-escolhas' }, sessao: 'S' }; } });
+    const salvar = store.salvar.bind(store);
+    store.salvar = f => { if (quebrar && f.erro) throw new Error('disco ocupado'); return salvar(f); };
+    nova('a'); o.acordar(); await o.esperarOcioso();
+    await new Promise(r => setTimeout(r, 20));
+    assert.deepEqual(soltas, []);
+    quebrar = false;
+    nova('b'); o.acordar(); await o.esperarOcioso();
+    assert.equal(store.carregar('b').etapa, 'escolhas-edicao');
+    assert.equal(vezesA, 1); // a ficha que quebrou não entra em laço
+  } finally { process.off('unhandledRejection', pegar); console.error = erroOriginal; }
+});
+
+test('pararTudo kills the running Claude child and leaves the ficha without error, ready for retomar', { timeout: 20000 }, async () => {
+  const config = { claude: { command: process.execPath, prefixArgs: [FAKE] }, skillsDir: '/s', maquinaDir: '/m', modeloEdicao: null };
+  const { store, o, nova } = montar({}, config);
+  const arqPid = path.join(os.tmpdir(), `esc-pid-${process.pid}-${Date.now()}`);
+  process.env.ESC_TEST_MODO = 'lento'; process.env.ESC_TEST_PID = arqPid;
+  try {
+    nova('a'); o.acordar();
+    for (let i = 0; i < 200 && !fs.existsSync(arqPid); i++) await new Promise(r => setTimeout(r, 25));
+    const pid = Number(fs.readFileSync(arqPid, 'utf8'));
+    assert.ok(pid > 0);
+    await o.pararTudo();
+    assert.throws(() => process.kill(pid, 0), /ESRCH/);
+    const f = store.carregar('a'); assert.equal(f.erro, null); assert.equal(f.etapa, 'bruto-recebido');
+    assert.equal(o.rodando.size, 0);
+    o.acordar(); assert.equal(o.rodando.size, 0); // depois de parar, nada novo começa
+  } finally { delete process.env.ESC_TEST_MODO; delete process.env.ESC_TEST_PID; fs.rmSync(arqPid, { force: true }); }
+});
+
+test('a Studio URL belongs to one video: a new run with the same URL clears it on the others', async () => {
+  const { store, o, nova } = montar({ edicao: async () => ({ estado: { etapa: 'revisao', studioUrl: 'http://s' }, sessao: 'S' }) });
+  const b = nova('b', 'aprovacao-video'); store.salvar({ ...b, edicao: { sessao: 'B', studioUrl: 'http://s' } });
+  const c = nova('c', 'aprovacao-video'); store.salvar({ ...c, edicao: { sessao: 'C', studioUrl: 'http://outra' } });
+  nova('a', 'editando'); o.acordar(); await o.esperarOcioso();
+  assert.equal(store.carregar('a').edicao.studioUrl, 'http://s');
+  assert.equal(store.carregar('b').edicao.studioUrl, null);
+  assert.equal(store.carregar('c').edicao.studioUrl, 'http://outra');
+  o.runners.edicao = async () => ({ estado: { etapa: 'revisao', studioUrl: 'http://outra' }, sessao: 'S' });
+  await o.reabrirStudio('b');
+  assert.equal(store.carregar('b').edicao.studioUrl, 'http://outra');
+  assert.equal(store.carregar('c').edicao.studioUrl, null);
 });
