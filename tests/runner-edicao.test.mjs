@@ -92,3 +92,54 @@ test('rodarEdicao refuses a run that stops in the wrong etapa', async () => {
   const run = async ({ cwd }) => { fs.writeFileSync(path.join(cwd, 'edit', 'estado.json'), JSON.stringify({ etapa: 'montando', progresso: 0.3 })); return { text: 'ok' }; };
   await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.montar, config, run }), /parou em "montando"/);
 });
+
+test('argsEdicao: --tools carries the same list as --allowedTools, PowerShell only on Windows, hooks off', () => {
+  const win = argsEdicao({ comando: 'PREPARAR', sessao: 'u', retomar: false, skillsDir: '/s', maquinaDir: '/m', plataforma: 'win32' });
+  const mac = argsEdicao({ comando: 'PREPARAR', sessao: 'u', retomar: false, skillsDir: '/s', maquinaDir: '/m', plataforma: 'darwin' });
+  for (const a of [win, mac]) {
+    assert.equal(a[a.indexOf('--tools') + 1], a[a.indexOf('--allowedTools') + 1]);
+    assert.deepEqual(JSON.parse(a[a.indexOf('--settings') + 1]), { disableAllHooks: true });
+  }
+  assert.ok(win[win.indexOf('--tools') + 1].split(',').includes('PowerShell'));
+  assert.ok(!mac[mac.indexOf('--tools') + 1].split(',').includes('PowerShell'));
+});
+
+test('rodarEdicao runs the child without CLAUDECODE in its env', async () => {
+  const p = pasta(); let env = null; const antes = process.env.CLAUDECODE; process.env.CLAUDECODE = '1';
+  const run = async (o) => { env = o.env; fs.writeFileSync(path.join(o.cwd, 'edit', 'estado.json'), JSON.stringify({ etapa: 'revisao', studioUrl: 'http://s' })); return { text: 'ok' }; };
+  try { await rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.reabrir, config, run }); }
+  finally { if (antes === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = antes; }
+  assert.ok(env && !('CLAUDECODE' in env)); assert.equal(env.PATH ?? env.Path, process.env.PATH ?? process.env.Path);
+});
+
+test('EXPORTAR without edit/final.mp4 or edit/resumo.md fails in pt-BR', async () => {
+  for (const [modo, msg] of [['sem-mp4', /sem o MP4 final \(edit\/final\.mp4\)/], ['sem-resumo', /sem o resumo do vídeo \(edit\/resumo\.md\)/]]) {
+    const p = pasta(); process.env.ESC_TEST_MODO = modo;
+    try { await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config }), msg, modo); }
+    finally { delete process.env.ESC_TEST_MODO; }
+  }
+});
+
+test('EXPORTAR with an empty final.mp4 fails', async () => {
+  const p = pasta();
+  const run = async ({ cwd }) => {
+    fs.writeFileSync(path.join(cwd, 'edit', 'estado.json'), JSON.stringify({ etapa: 'exportado' }));
+    fs.writeFileSync(path.join(cwd, 'edit', 'final.mp4'), ''); fs.writeFileSync(path.join(cwd, 'edit', 'resumo.md'), 'Tema: x');
+    return { text: 'ok' };
+  };
+  await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config, run }), /sem o MP4 final/);
+});
+
+test('a run that ends without a result but wrote the expected fresh estado.json counts as done', async () => {
+  const p = pasta(); process.env.ESC_TEST_MODO = 'sem-resultado-feito';
+  try {
+    const r = await rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config });
+    assert.equal(r.estado.etapa, 'exportado');
+  } finally { delete process.env.ESC_TEST_MODO; }
+});
+
+test('a run that ends without a result and a stale or wrong estado.json still fails', async () => {
+  const p = pasta();
+  const run = async ({ cwd }) => { fs.writeFileSync(path.join(cwd, 'edit', 'estado.json'), JSON.stringify({ etapa: 'montando' })); throw new Error('O Claude não devolveu um resultado concluído.'); };
+  await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.montar, config, run }), /terminou sem resultado/);
+});

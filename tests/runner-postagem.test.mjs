@@ -56,3 +56,28 @@ test('rodarPostagem without resumo.md fails clearly', async () => {
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-post-'));
   await assert.rejects(rodarPostagem({ pastaVideo: pasta, ficha: {}, cerebroDir: pasta, config, agora: AGORA }), /resumo do vídeo/);
 });
+
+test('argsPostagem: student hooks are off', () => {
+  const a = argsPostagem('oi');
+  assert.deepEqual(JSON.parse(a[a.indexOf('--settings') + 1]), { disableAllHooks: true });
+});
+
+test('montarPrompt with a revision carries the previous caption and hashtags', () => {
+  const anterior = { legenda: 'Legenda antiga bem comprida', hashtags: ['#velha', '#ia'] };
+  const p = montarPrompt({ resumo: 'Tema: IA', perfil: null, revisao: 'mais curta', anterior, agora: AGORA });
+  for (const s of ['## Versão anterior', 'Legenda antiga bem comprida', '#velha #ia', 'mais curta']) assert.ok(p.includes(s), s);
+  assert.ok(!montarPrompt({ resumo: 'Tema: IA', perfil: null, revisao: null, anterior, agora: AGORA }).includes('Versão anterior'));
+});
+
+test('rodarPostagem sends the previous post when the owner asked for a change, without CLAUDECODE in env', async () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-post-')); fs.mkdirSync(path.join(pasta, 'edit'));
+  fs.writeFileSync(path.join(pasta, 'edit', 'resumo.md'), 'Tema: teste');
+  let visto = null; const antes = process.env.CLAUDECODE; process.env.CLAUDECODE = '1';
+  const run = async (o) => { visto = o; return { text: '{"legenda":"Nova","hashtags":[],"horario":"2099-01-01T18:00:00-03:00"}' }; };
+  try {
+    await rodarPostagem({ pastaVideo: pasta, ficha: { revisao: 'mais curta', postagem: { legenda: 'Antiga', hashtags: ['#a'] } }, cerebroDir: pasta, config, run, agora: AGORA });
+  } finally { if (antes === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = antes; }
+  const prompt = visto.args[1];
+  assert.ok(prompt.includes('## Versão anterior') && prompt.includes('Antiga') && prompt.includes('#a'));
+  assert.ok(!('CLAUDECODE' in visto.env));
+});
