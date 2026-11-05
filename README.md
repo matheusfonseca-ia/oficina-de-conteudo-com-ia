@@ -33,7 +33,7 @@ O instalador confere tudo, prepara o escritório e instala o comando `/escritori
 1. No Claude Code, digite `/escritorio`. O escritório abre no navegador (endereço `http://localhost:4540`).
 2. Clique em **Já gravei** ou solte o vídeo bruto na tela.
 3. Quando o escritório pedir, escolha o **formato** e o **estilo** do vídeo.
-4. Assista o resultado no Studio. Se gostou, aprove. Se não, peça ajustes.
+4. Assista o resultado no Studio (a janela onde você assiste e revisa o vídeo). Se gostou, aprove. Se não, peça ajustes.
 5. Aprove a legenda, copie o texto e baixe o vídeo.
 
 Se preferir, também dá pra abrir sem o Claude Code: `npm start` dentro da pasta.
@@ -54,7 +54,7 @@ A sala de Postagem usa isso pra escrever a legenda com a sua cara. Sem o arquivo
 
 ## Atualizar
 
-Dentro da pasta, rode `git pull` e depois o instalador de novo. Seus dados continuam intactos.
+Se você baixou com git, dentro da pasta rode `git pull` e depois o instalador de novo. Se baixou o ZIP, baixe o ZIP novo, troque a pasta antiga pela nova e rode o instalador de novo. Nos dois casos os seus dados em `~/.escritorio-de-conteudo` continuam intactos.
 
 ## O que vem nas próximas versões
 

@@ -15,7 +15,7 @@ App local em Node (sem framework de servidor) + cena 3D (three, bundle único em
 - Nenhum teste chama o Claude de verdade: use runners falsos (`runners`, `ESC_CLAUDE_COMMAND`, `ESC_CLAUDE_PREFIX_ARGS`).
 - `src/builders.js`, `lib/claude-runner.mjs` e `lib/execution.mjs` são **cópias literais** de `projetos/agents-office` (Oficina de Agentes). Correção feita lá precisa ser copiada aqui à mão, e vice-versa. Não editar só aqui.
 - Dados do aluno ficam fora do repo (`ESC_DATA`, padrão `~/.escritorio-de-conteudo`). Nunca gravar dados dentro da pasta do repo.
-- Os instaladores (`instalar.sh`, `instalar.ps1`) não podem ter chave só de teste. Escrevem `instalacao.json` (`pasta`, `versao`) que a skill `/escritorio` lê.
+- Não adicionar opções só para teste nos instaladores (`instalar.sh`, `instalar.ps1`). Eles escrevem `instalacao.json` (`pasta`, `versao`) que a skill `/escritorio` lê.
 
 ## Laço de verificação
 ```

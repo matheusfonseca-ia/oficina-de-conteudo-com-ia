@@ -1,4 +1,4 @@
-# Instalador do Escritório de Conteúdo (Windows). Rode de dentro da pasta baixada:
+﻿# Instalador do Escritório de Conteúdo (Windows). Rode de dentro da pasta baixada:
 #   powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 $ErrorActionPreference = 'Stop'
 $pasta = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -18,7 +18,8 @@ try {
   node build.mjs; if ($LASTEXITCODE -ne 0) { throw 'build falhou' }
   New-Item -ItemType Directory -Force $dados | Out-Null
   $versao = node -p "require('./package.json').version"
-  @{ pasta = $pasta; versao = $versao } | ConvertTo-Json | Out-File -Encoding utf8 (Join-Path $dados 'instalacao.json')
+  $json = @{ pasta = $pasta; versao = $versao } | ConvertTo-Json
+  [IO.File]::WriteAllText((Join-Path $dados 'instalacao.json'), $json, (New-Object System.Text.UTF8Encoding $false))
   $destino = Join-Path $skills 'escritorio'
   if (Test-Path $destino) {
     $backup = Join-Path $HOME (".claude\skills-backup\" + (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss') + "-$PID")
