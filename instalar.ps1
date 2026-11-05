@@ -10,7 +10,9 @@ if (-not (Test-Path (Join-Path $skills 'maquina-de-edicao\referencias\modo-escri
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Host 'Falta o Node.js 22.13 ou mais novo: winget install OpenJS.NodeJS.LTS'; exit 1 }
 node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)"
 if ($LASTEXITCODE -ne 0) { Write-Host 'Seu Node é antigo. Precisa da versão 22.13 ou mais nova.'; exit 1 }
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Write-Host 'Falta o Claude Code. Instale e faça login antes.'; exit 1 }
+# O escritório chama o claude sem shell: só o claude.exe do instalador oficial funciona (o claude.cmd do npm não).
+$claudeExe = Get-Command claude -CommandType Application -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -like '*.exe' } | Select-Object -First 1
+if (-not $claudeExe) { Write-Host 'O escritório precisa do Claude Code instalado pelo instalador oficial (claude.exe). Instale em https://claude.com/claude-code e faça login.'; exit 1 }
 
 Push-Location $pasta
 try {
