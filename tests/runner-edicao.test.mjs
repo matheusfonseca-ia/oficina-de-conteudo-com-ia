@@ -64,6 +64,29 @@ test('REABRIR_STUDIO returns the new Studio URL', async () => {
   assert.equal(r.estado.etapa, 'revisao'); assert.equal(r.estado.studioUrl, 'http://127.0.0.1:9/');
 });
 
+test('rodarEdicao ignores a stale estado.json left by a previous run', async () => {
+  const p = pasta();
+  const antigo = path.join(p, 'edit', 'estado.json');
+  fs.writeFileSync(antigo, JSON.stringify({ etapa: 'revisao', studioUrl: 'http://velho' }));
+  const velho = new Date('2020-01-01T00:00:00Z');
+  fs.utimesSync(antigo, velho, velho);
+  process.env.ESC_TEST_MODO = 'sem-estado';
+  try {
+    await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.reabrir, config }), /não deixou o andamento/);
+  } finally { delete process.env.ESC_TEST_MODO; }
+});
+
+test('rodarEdicao REVISAR: keeps the prefix and reaches revisao', async () => {
+  const p = pasta();
+  const r = await rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: 'REVISAR: legenda maior', config });
+  assert.equal(r.estado.etapa, 'revisao');
+});
+
+test('rodarEdicao rejects an unknown comando before running Claude', async () => {
+  const p = pasta();
+  await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: 'FOO', config }), /Comando desconhecido para a Máquina: FOO/);
+});
+
 test('rodarEdicao refuses a run that stops in the wrong etapa', async () => {
   const p = pasta();
   const run = async ({ cwd }) => { fs.writeFileSync(path.join(cwd, 'edit', 'estado.json'), JSON.stringify({ etapa: 'montando', progresso: 0.3 })); return { text: 'ok' }; };
