@@ -1,0 +1,11 @@
+{
+  "_sobre": "As seis salas do Escritório de Conteúdo, em ordem horária. 'ativa: false' = sala ainda não liberada nesta versão.",
+  "salas": [
+    { "chave": "pesquisa", "nome": "PESQUISA", "ordem": 1, "ativa": false, "chip": "#8FD3F4", "ink": "#2E86AB", "piso": "#E6F4FB", "led": "#1ACDFF", "contador": { "rotulo": "Referências", "etapas": [] } },
+    { "chave": "roteiro",  "nome": "ROTEIRO",  "ordem": 2, "ativa": false, "chip": "#5ADEB7", "ink": "#1E9070", "piso": "#E9F6EF", "led": "#1AFF9F", "contador": { "rotulo": "Roteiros", "etapas": [] } },
+    { "chave": "edicao",   "nome": "EDIÇÃO",   "ordem": 3, "ativa": true,  "chip": "#E69393", "ink": "#C46060", "piso": "#FAE9E7", "led": "#FF3366", "contador": { "rotulo": "Vídeos editados", "etapas": ["capa", "postagem", "aprovacao-pacote", "pronto-pra-postar", "agendado", "analise", "concluido"] } },
+    { "chave": "capa",     "nome": "CAPA",     "ordem": 4, "ativa": false, "chip": "#EADC8F", "ink": "#A08A1E", "piso": "#F6F1DA", "led": "#FFD11A", "contador": { "rotulo": "Capas", "etapas": [] } },
+    { "chave": "postagem", "nome": "POSTAGEM", "ordem": 5, "ativa": true,  "chip": "#BFA2E3", "ink": "#7449A9", "piso": "#F2ECFA", "led": "#B84DFF", "contador": { "rotulo": "Posts prontos", "etapas": ["pronto-pra-postar", "agendado", "analise", "concluido"] } },
+    { "chave": "analise",  "nome": "ANÁLISE",  "ordem": 6, "ativa": false, "chip": "#98A5EF", "ink": "#5B66CE", "piso": "#EAEDFA", "led": "#476CFF", "contador": { "rotulo": "Relatórios", "etapas": [] } }
+  ]
+}
