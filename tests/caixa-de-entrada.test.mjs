@@ -52,3 +52,62 @@ test('a locked file is retried on the next scan instead of failing', () => {
   } finally { fs.renameSync = original; }
   assert.equal(criadas.length, 1);
 });
+
+function capturarErros() {
+  const original = console.error; const msgs = [];
+  console.error = (...a) => msgs.push(a.join(' '));
+  return { msgs, restaurar: () => { console.error = original; } };
+}
+
+test('a file whose move throws does not starve the others and is retried later', () => {
+  const { store, caixa, em, criadas } = montar();
+  fs.writeFileSync(em('ruim.mp4'), 'abc'); fs.writeFileSync(em('boa.mp4'), 'xyz');
+  caixa.varrer();
+  const original = fs.renameSync;
+  fs.renameSync = (a, b) => { if (String(a).endsWith('ruim.mp4')) { const e = new Error('no space'); e.code = 'ENOSPC'; throw e; } return original(a, b); };
+  const log = capturarErros();
+  try {
+    assert.deepEqual(caixa.varrer().map(f => f.tema), ['boa']);
+    assert.equal(fs.readdirSync(store.videosDir).length, 1);   // pasta da ruim foi removida
+    assert.ok(fs.existsSync(em('ruim.mp4')));                  // continua na caixa
+    assert.ok(log.msgs.some(m => m.includes('ruim.mp4') && m.includes('no space')));
+  } finally { fs.renameSync = original; log.restaurar(); }
+  assert.deepEqual(caixa.varrer().map(f => f.tema), ['ruim']);
+  assert.equal(criadas.length, 2);
+});
+
+test('EXDEV where unlink fails leaves nothing behind and the next scan creates one ficha', () => {
+  const { store, caixa, em, criadas } = montar();
+  fs.writeFileSync(em('aula.mp4'), 'abc');
+  caixa.varrer();
+  const renOriginal = fs.renameSync, unlinkOriginal = fs.unlinkSync;
+  let exdev = false, busy = false;
+  fs.renameSync = (a, b) => { if (!exdev && String(a).endsWith('aula.mp4')) { exdev = true; const e = new Error('cross'); e.code = 'EXDEV'; throw e; } return renOriginal(a, b); };
+  fs.unlinkSync = p => { if (!busy && String(p).endsWith('aula.mp4')) { busy = true; const e = new Error('busy'); e.code = 'EBUSY'; throw e; } return unlinkOriginal(p); };
+  const log = capturarErros();
+  try {
+    assert.equal(caixa.varrer().length, 0);
+    assert.deepEqual(fs.readdirSync(store.videosDir), []);
+    assert.ok(fs.existsSync(em('aula.mp4')));
+  } finally { fs.renameSync = renOriginal; fs.unlinkSync = unlinkOriginal; log.restaurar(); }
+  assert.equal(caixa.varrer().length, 1);
+  assert.equal(criadas.length, 1);
+  assert.equal(fs.readdirSync(store.videosDir).length, 1);
+});
+
+test('a failed salvar puts the bruto back in the caixa and leaves no folder', () => {
+  const { store, caixa, em, criadas } = montar();
+  fs.writeFileSync(em('falha.mp4'), 'abc');
+  caixa.varrer();
+  const salvarOriginal = store.salvar;
+  store.salvar = () => { throw new Error('disco cheio'); };
+  const log = capturarErros();
+  try {
+    assert.equal(caixa.varrer().length, 0);
+  } finally { store.salvar = salvarOriginal; log.restaurar(); }
+  assert.deepEqual(fs.readdirSync(store.videosDir), []);
+  assert.equal(fs.readFileSync(em('falha.mp4'), 'utf8'), 'abc');
+  assert.ok(log.msgs.some(m => m.includes('falha.mp4') && m.includes('disco cheio')));
+  assert.equal(caixa.varrer().length, 1);
+  assert.equal(criadas.length, 1);
+});
