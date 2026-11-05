@@ -46,6 +46,8 @@
   #modal iframe { flex: 1; border: 0; width: 100%; }
   #soltar { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(253,255,248,.85); font: 700 22px var(--ui); z-index: 20; border: 3px dashed var(--ink); }
   body.soltando #soltar { display: flex; }
+  #fechado { position: fixed; top: 0; left: 0; right: 0; z-index: 30; background: #B3261E; color: #fff; font: 700 14px var(--ui); text-align: center; padding: 14px 20px; }
+  #fechado[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -62,6 +64,7 @@
 </aside>
 <div id="modal"><div class="caixa"><div class="topo"><span>Escolha formato e estilo do vídeo</span><span><a id="modal-aba" target="_blank" rel="noopener">abrir em outra aba</a> · <button id="modal-fechar">Fechar</button></span></div><iframe title="Painel da Máquina de Edição"></iframe></div></div>
 <div id="soltar">Solte o vídeo bruto aqui</div>
+<div id="fechado" role="alert" hidden>O escritório foi fechado. Abra o Claude Code e chame /escritorio de novo.</div>
 <!--APP-->
 </body>
 </html>

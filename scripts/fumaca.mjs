@@ -39,16 +39,36 @@ await page.waitForSelector('#modal iframe[src="http://localhost:4517/"]');
 await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id === i)?.etapa === 'aprovacao-video', id, { timeout: 15000 });
 await page.waitForTimeout(2000);
 ok(await page.locator('#modal.aberto').count() === 0, 'modal do painel fecha quando as escolhas chegam');
+await page.context().route('http://127.0.0.1:9/**', r => r.fulfill({ contentType: 'text/html', body: '<title>Studio</title>Studio' })); // o Studio falso
+const [aba] = await Promise.all([page.waitForEvent('popup', { timeout: 10000 }), page.click(`.ficha[data-id="${id}"] [data-acao="studio"]`)]);
+ok(await aba.evaluate(() => window.opener === null), 'aba do Studio abre já no clique, sem opener');
+await aba.waitForURL(u => String(u).startsWith('http://127.0.0.1:9/'), { timeout: 15000, waitUntil: 'commit' }).then(() => ok(true, 'aba do Studio vai pro endereço do Studio'), e => ok(false, 'aba do Studio vai pro endereço do Studio: ' + e.message));
+await aba.close();
 await page.click(`.ficha[data-id="${id}"] [data-acao="aprovar"]`);
 await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id === i)?.etapa === 'aprovacao-pacote', id, { timeout: 15000 });
 await page.waitForTimeout(2000);
 ok((await page.locator(`.ficha[data-id="${id}"]`).innerText()).includes('Legenda de teste'), 'legenda aparece pra aprovar');
+ok(await page.locator(`.ficha[data-id="${id}"] a.botao:has-text("Baixar vídeo")`).count() === 1, 'Baixar vídeo já aparece na aprovação do post');
+ok(await page.locator('#fechado').isHidden(), 'aviso de escritório fechado escondido enquanto ele responde');
 await page.waitForTimeout(1000);
 await page.screenshot({ path: saida });
 await page.keyboard.press('l');
 ok(await page.evaluate(() => document.body.classList.contains('limpo')), 'tecla L liga o modo limpo');
 await page.waitForTimeout(500);
 await page.screenshot({ path: saida.replace('.png', '-limpo.png') });
+await page.keyboard.press('l');
+// Cursor do campo de ajuste sobrevive ao repinte da lista (um vídeo novo chegando repinta tudo).
+const campo = `.ficha[data-id="${id}"] textarea[data-campo="revisao"]`;
+await page.click(campo); await page.keyboard.type('mais curta e direta');
+await page.evaluate(s => document.querySelector(s).setSelectionRange(5, 10), campo);
+fs.writeFileSync(path.join(app.caixa.store.caixaDir, 'outra.mp4'), 'x'); app.caixa.varrer(); app.caixa.varrer();
+await page.waitForFunction(() => window.ESC.ultimoEstado.videos.length === 2 && document.querySelectorAll('.ficha').length === 2, null, { timeout: 15000 });
+await page.waitForTimeout(500);
+const sel = await page.evaluate(s => { const t = document.querySelector(s); return { foco: document.activeElement === t, ini: t.selectionStart, fim: t.selectionEnd, valor: t.value }; }, campo);
+ok(sel.foco && sel.ini === 5 && sel.fim === 10 && sel.valor === 'mais curta e direta', `cursor do campo de ajuste fica no lugar depois do repinte (${JSON.stringify(sel)})`);
+await app.fechar();
+await page.waitForSelector('#fechado', { state: 'visible', timeout: 10000 }).then(() => ok(true, 'aviso aparece quando o escritório fecha'), () => ok(false, 'aviso aparece quando o escritório fecha'));
+erros.splice(0, erros.length, ...erros.filter(m => !/Failed to load resource|ERR_CONNECTION_REFUSED/.test(m))); // o servidor fechado de propósito
 } finally { await browser.close(); app.fechar(); }
 ok(erros.length === 0, 'sem erros no console: ' + erros.join(' | '));
 for (const [c, m] of checks) console.log(c ? '✓' : '✗', m);

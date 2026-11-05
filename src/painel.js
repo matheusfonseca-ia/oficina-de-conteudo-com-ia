@@ -24,6 +24,7 @@ export function aplicarEstado(ESC, estado, pacotes) {
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const $ = s => document.querySelector(s);
 const ESPERAS = new Set(['escolhas-edicao', 'aprovacao-video', 'aprovacao-pacote', 'pronto-pra-postar']);
+const DEPOIS_DA_EXPORTACAO = new Set(['capa', 'postagem', 'aprovacao-pacote', 'pronto-pra-postar', 'agendado', 'analise', 'concluido']);
 const notificados = new Set();
 
 function trilha(v) {
@@ -39,8 +40,13 @@ function cartao(v) {
   const meta = ETAPAS[v.etapa];
   let corpo = `<h3>${esc(v.tema || v.id)}</h3>${trilha(v)}<div class="etapa">${esc(v.andamento?.mensagem || meta.texto)}</div>`;
   if (v.andamento) corpo += `<div class="barra"><b style="width:${Math.round(v.andamento.progresso * 100)}%"></b></div>`;
-  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button></div>`;
-  else if (!v.trabalhando) {
+  // Depois da exportação o MP4 existe: "Baixar vídeo" fica sempre à mão, com ou sem postagem.
+  const baixar = DEPOIS_DA_EXPORTACAO.has(v.etapa) ? `<a class="botao" download href="/api/videos/${encodeURIComponent(v.id)}/final.mp4">Baixar vídeo</a>` : '';
+  const copiar = v.postagem ? '<button data-acao="copiar">Copiar legenda</button>' : '';
+  const comAcoesProprias = !v.erro && !v.trabalhando && (v.etapa === 'aprovacao-pacote' || v.etapa === 'pronto-pra-postar');
+  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button>${baixar}</div>`;
+  else if (baixar && !comAcoesProprias) corpo += `<div class="acoes">${baixar}</div>`;
+  if (!v.erro && !v.trabalhando) {
     if (v.etapa === 'escolhas-edicao') corpo += `<div class="acoes"><button class="forte" data-acao="painel">Escolher formato e estilo</button></div>`;
     if (v.etapa === 'aprovacao-video') corpo += `<textarea data-campo="revisao" placeholder="O que mudar? Ex.: legenda maior, tira a música"></textarea>
       <div class="acoes"><button data-acao="studio">Assistir no Studio</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar e exportar</button></div>`;
@@ -49,10 +55,10 @@ function cartao(v) {
       if (p) corpo += `<div class="legenda">${esc(p.legenda)}\n\n${esc((p.hashtags || []).join(' '))}</div><div class="etapa">Sugestão: ${esc(horaTexto(p.horario))}${p.motivoHorario ? ' · ' + esc(p.motivoHorario) : ''}</div>`;
     }
     if (v.etapa === 'aprovacao-pacote') corpo += `<textarea data-campo="revisao" placeholder="O que mudar na legenda?"></textarea>
-      <div class="acoes"><button data-acao="copiar">Copiar legenda</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar</button></div>`;
+      <div class="acoes">${baixar}${copiar}<button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar</button></div>`;
     if (v.etapa === 'pronto-pra-postar') {
       const hora = v.postagem && new Date(v.postagem.horario) <= new Date();
-      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes"><a class="botao" download href="/api/videos/${encodeURIComponent(v.id)}/final.mp4">Baixar vídeo</a><button data-acao="copiar">Copiar legenda</button><button class="forte" data-acao="postado">Já postei</button></div>`;
+      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes">${baixar}${copiar}<button class="forte" data-acao="postado">Já postei</button></div>`;
     }
   }
   if (ORDEM.indexOf(salaDaEtapa(v.etapa)) < ORDEM.indexOf('postagem') && !v.pular.includes('postagem'))
@@ -75,10 +81,32 @@ function renderLista(e) {
     + (!e.videos.length ? '<p class="etapa">Nenhum vídeo ainda. Clique em <b>Já gravei</b> ou solte o arquivo bruto em qualquer lugar da tela.</p>' : '');
   if (html === ultimoHtml) return;
   const lista = $('#lista'), foco = document.activeElement, focoId = foco?.closest?.('.ficha')?.dataset.id, pos = lista.scrollTop;
+  const emTexto = foco?.tagName === 'TEXTAREA' && lista.contains(foco);
+  const cursor = emTexto ? [foco.selectionStart, foco.selectionEnd, foco.selectionDirection, foco.scrollTop] : null;
   ultimoHtml = html; lista.innerHTML = html;
   for (const t of lista.querySelectorAll('textarea[data-campo]')) { const r = rascunhos.get(t.closest('.ficha').dataset.id); if (r) t.value = r; }
-  if (focoId && foco.tagName === 'TEXTAREA') lista.querySelector(`.ficha[data-id="${CSS.escape(focoId)}"] textarea`)?.focus();
+  if (focoId && emTexto) {
+    // O repinte troca o elemento: devolve o foco e o cursor (ou a seleção) pro mesmo lugar do texto.
+    const t = lista.querySelector(`.ficha[data-id="${CSS.escape(focoId)}"] textarea`);
+    if (t) { t.focus(); t.setSelectionRange(cursor[0], cursor[1], cursor[2] || 'none'); t.scrollTop = cursor[3]; }
+  }
   lista.scrollTop = pos;
+}
+
+// A aba abre já no clique (senão o navegador bloqueia o pop-up, porque reabrir o Studio demora),
+// mostra "Abrindo o Studio…" e só depois vai pro endereço. Sem 'noopener' aqui: com ele window.open devolve null.
+async function abrirStudio(btn, base) {
+  const aba = window.open('about:blank', '_blank');
+  if (aba) {
+    aba.opener = null;
+    try { aba.document.title = 'Abrindo o Studio…'; aba.document.body.innerHTML = '<p style="font:16px system-ui,sans-serif;padding:24px">Abrindo o Studio…</p>'; } catch {}
+  }
+  const texto = btn.textContent; btn.textContent = 'Abrindo o Studio…';
+  try {
+    const { url } = await api.post(base + '/studio');
+    if (aba && !aba.closed) aba.location = url; else window.open(url, '_blank', 'noopener');
+  } catch (e) { aba?.close(); throw e; }
+  finally { btn.textContent = texto; }
 }
 
 async function agir(btn) {
@@ -87,7 +115,7 @@ async function agir(btn) {
   const acao = btn.dataset.acao; btn.disabled = true;
   try {
     if (acao === 'painel') { const { url } = await api.post(base + '/painel'); abrirModal(url, id); }
-    else if (acao === 'studio') { const { url } = await api.post(base + '/studio'); window.open(url, '_blank', 'noopener'); }
+    else if (acao === 'studio') await abrirStudio(btn, base);
     else if (acao === 'revisar') { const texto = ficha.querySelector('[data-campo="revisao"]').value.trim(); if (!texto) throw new Error('Escreva o que mudar.'); await api.post(base + '/evento', { tipo: 'revisar', texto }); }
     else if (acao === 'aprovar') await api.post(base + '/evento', { tipo: 'aprovou' });
     else if (acao === 'postado') await api.post(base + '/evento', { tipo: 'postado' });
@@ -148,9 +176,14 @@ export function iniciarPainel(ESC) {
   $('#modal-fechar').addEventListener('click', fecharModal);
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) && !document.activeElement?.isContentEditable) { document.body.classList.toggle('limpo'); ESC.enquadrar(); } });
   ESC.aoClicarSala(k => { const v = ESC.ultimoEstado?.videos.find(x => salaDaEtapa(x.etapa) === k); if (v) document.querySelector(`.ficha[data-id="${CSS.escape(v.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  // Duas leituras seguidas sem resposta: o servidor caiu (quase sempre porque o Claude Code foi fechado).
+  let falhas = 0;
   const ciclo = async () => {
-    try {
-      const e = await api.estado(); ESC.ultimoEstado = e;
+    let e = null;
+    try { e = await api.estado(); falhas = 0; } catch (err) { falhas++; console.warn('estado:', err.message); }
+    $('#fechado').hidden = falhas < 2;
+    if (e) try {
+      ESC.ultimoEstado = e;
       aplicarEstado(ESC, e, pacotes); ESC.aoEstado?.(e); placas(e); renderLista(e);
       if (modalId && e.videos.find(v => v.id === modalId)?.etapa !== 'escolhas-edicao') fecharModal();
     } catch (err) { console.warn('estado:', err.message); }
