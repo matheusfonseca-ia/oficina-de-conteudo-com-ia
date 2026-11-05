@@ -18,7 +18,7 @@ const view = { target: new THREE.Vector3(-6, 0, -6), zoom: 0.8 };
 function enquadrar() {
   const xs = Object.values(LAYOUT).flatMap(L => [-1, 1].flatMap(sx => [-1, 1].map(sz => ((L.pos[0] + sx * L.w / 2) - (L.pos[1] + sz * L.d / 2)) / Math.SQRT2)));
   const largura = Math.max(...xs) - Math.min(...xs);
-  view.zoom = Math.max(0.3, Math.min(0.8, (innerWidth - PAINEL_LARGURA() - 360) * (2 * FR) / (largura * innerHeight)));
+  view.zoom = Math.max(0.3, Math.min(1, (innerWidth - PAINEL_LARGURA() - 470) * (2 * FR) / (largura * innerHeight)));
   const ppw = view.zoom * innerHeight / (2 * FR), sh = (PAINEL_LARGURA() / 2) / ppw;
   const SR = new THREE.Vector3(1, 0, -1).normalize();
   view.target.set(-6 + SR.x * sh, 0, -6 + SR.z * sh);

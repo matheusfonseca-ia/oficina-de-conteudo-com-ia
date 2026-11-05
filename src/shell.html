@@ -16,6 +16,7 @@
   .portas { display: flex; gap: 8px; margin-bottom: 14px; }
   .portas button { flex: 1; }
   button { font: 600 13px var(--ui); border-radius: 9px; border: 1px solid var(--hair); background: #fff; padding: 9px 12px; cursor: pointer; }
+  a.botao { font: 600 13px var(--ui); border-radius: 9px; border: 1px solid var(--hair); background: #fff; padding: 9px 12px; color: var(--ink); text-decoration: none; display: inline-block; }
   button.forte { background: var(--ink); color: #fff; border-color: var(--ink); }
   button:disabled { opacity: .45; cursor: default; }
   .grupo { font: 700 11px var(--ui); letter-spacing: .08em; color: var(--grey); margin: 16px 0 8px; text-transform: uppercase; }
@@ -32,11 +33,11 @@
   .ficha textarea { width: 100%; box-sizing: border-box; font: 13px var(--ui); border: 1px solid var(--hair); border-radius: 8px; padding: 8px; margin-top: 8px; }
   .legenda { white-space: pre-wrap; font-size: 13px; background: #FAFAF7; border-radius: 8px; padding: 8px; margin-top: 8px; max-height: 160px; overflow: auto; }
   .barra { height: 6px; background: #EEE; border-radius: 3px; margin-top: 6px; } .barra b { display: block; height: 100%; background: var(--ink); border-radius: 3px; }
-  .placa-sala { position: fixed; transform: translate(-50%, -100%); background: #fff; border: 1px solid var(--hair); border-radius: 12px; padding: 10px 12px; min-width: 150px; font-size: 12px; pointer-events: auto; z-index: 3; }
-  .placa-sala b { display: flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: .06em; }
+  .placa-sala { position: fixed; transform: translate(-50%, -100%); background: #fff; border: 1px solid var(--hair); border-radius: 12px; padding: 7px 10px; min-width: 120px; font-size: 11px; pointer-events: auto; z-index: 3; }
+  .placa-sala b { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .06em; }
   .placa-sala b::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #BBB); }
   .placa-sala[data-estado="trabalhando"] { --c: #2BB673; } .placa-sala[data-estado="esperando"] { --c: #F2B84B; } .placa-sala[data-estado="problema"] { --c: #E5484D; }
-  .placa-sala .linha { color: var(--grey); margin: 4px 0; max-width: 200px; }
+  .placa-sala .linha { color: var(--grey); margin: 3px 0; max-width: 150px; }
   .placa-sala .num { display: flex; justify-content: space-between; gap: 10px; }
   #modal { position: fixed; inset: 0; background: rgba(21,20,20,.35); display: none; align-items: center; justify-content: center; z-index: 10; }
   #modal.aberto { display: flex; }

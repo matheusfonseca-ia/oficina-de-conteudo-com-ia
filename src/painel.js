@@ -46,33 +46,39 @@ function cartao(v) {
       <div class="acoes"><button data-acao="studio">Assistir no Studio</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar e exportar</button></div>`;
     if (v.etapa === 'aprovacao-pacote' || v.etapa === 'pronto-pra-postar') {
       const p = v.postagem;
-      corpo += `<div class="legenda">${esc(p.legenda)}\n\n${esc(p.hashtags.join(' '))}</div><div class="etapa">Sugestão: ${esc(horaTexto(p.horario))}${p.motivoHorario ? ' · ' + esc(p.motivoHorario) : ''}</div>`;
+      if (p) corpo += `<div class="legenda">${esc(p.legenda)}\n\n${esc((p.hashtags || []).join(' '))}</div><div class="etapa">Sugestão: ${esc(horaTexto(p.horario))}${p.motivoHorario ? ' · ' + esc(p.motivoHorario) : ''}</div>`;
     }
     if (v.etapa === 'aprovacao-pacote') corpo += `<textarea data-campo="revisao" placeholder="O que mudar na legenda?"></textarea>
       <div class="acoes"><button data-acao="copiar">Copiar legenda</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar</button></div>`;
     if (v.etapa === 'pronto-pra-postar') {
-      const hora = new Date(v.postagem.horario) <= new Date();
-      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes"><a href="/api/videos/${encodeURIComponent(v.id)}/final.mp4"><button>Baixar vídeo</button></a><button data-acao="copiar">Copiar legenda</button><button class="forte" data-acao="postado">Já postei</button></div>`;
+      const hora = v.postagem && new Date(v.postagem.horario) <= new Date();
+      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes"><a class="botao" download href="/api/videos/${encodeURIComponent(v.id)}/final.mp4">Baixar vídeo</a><button data-acao="copiar">Copiar legenda</button><button class="forte" data-acao="postado">Já postei</button></div>`;
     }
-    if (ORDEM.indexOf(salaDaEtapa(v.etapa)) < ORDEM.indexOf('postagem') && !v.pular.includes('postagem'))
-      corpo += `<div class="acoes"><button data-acao="pular-postagem">Pular postagem (eu mesmo posto)</button></div>`;
   }
+  if (ORDEM.indexOf(salaDaEtapa(v.etapa)) < ORDEM.indexOf('postagem') && !v.pular.includes('postagem'))
+    corpo += `<div class="acoes"><button data-acao="pular-postagem">Pular postagem (eu mesmo posto)</button></div>`;
   return `<div class="ficha${ESPERAS.has(v.etapa) && !v.trabalhando ? ' espera' : ''}" data-id="${esc(v.id)}">${corpo}</div>`;
 }
 
+const rascunhos = new Map();
+let ultimoHtml = null, concluidosAberto = false;
 function renderLista(e) {
+  for (const v of e.videos) if (v.etapa === 'pronto-pra-postar' && v.postagem && new Date(v.postagem.horario) <= new Date() && !notificados.has(v.id)) {
+    notificados.add(v.id); if (window.Notification?.permission === 'granted') new Notification('Hora de postar', { body: v.tema || v.id });
+  }
   const espera = e.videos.filter(v => (ESPERAS.has(v.etapa) && !v.trabalhando) || v.erro);
   const fim = e.videos.filter(v => v.etapa === 'concluido');
   const resto = e.videos.filter(v => !espera.includes(v) && !fim.includes(v));
-  const ativo = document.activeElement?.closest?.('.ficha')?.dataset.id; // don't wipe a textarea being typed in
-  if (ativo) return;
-  $('#lista').innerHTML = (espera.length ? '<div class="grupo">Esperando você</div>' + espera.map(cartao).join('') : '')
+  const html = (espera.length ? '<div class="grupo">Esperando você</div>' + espera.map(cartao).join('') : '')
     + (resto.length ? '<div class="grupo">Trabalhando</div>' + resto.map(cartao).join('') : '')
-    + (fim.length ? `<details><summary class="grupo">Concluídos (${fim.length})</summary>${fim.map(cartao).join('')}</details>` : '')
+    + (fim.length ? `<details${concluidosAberto ? ' open' : ''}><summary class="grupo">Concluídos (${fim.length})</summary>${fim.map(cartao).join('')}</details>` : '')
     + (!e.videos.length ? '<p class="etapa">Nenhum vídeo ainda. Clique em <b>Já gravei</b> ou solte o arquivo bruto em qualquer lugar da tela.</p>' : '');
-  for (const v of e.videos) if (v.etapa === 'pronto-pra-postar' && new Date(v.postagem.horario) <= new Date() && !notificados.has(v.id)) {
-    notificados.add(v.id); if (window.Notification?.permission === 'granted') new Notification('Hora de postar', { body: v.tema || v.id });
-  }
+  if (html === ultimoHtml) return;
+  const lista = $('#lista'), foco = document.activeElement, focoId = foco?.closest?.('.ficha')?.dataset.id, pos = lista.scrollTop;
+  ultimoHtml = html; lista.innerHTML = html;
+  for (const t of lista.querySelectorAll('textarea[data-campo]')) { const r = rascunhos.get(t.closest('.ficha').dataset.id); if (r) t.value = r; }
+  if (focoId && foco.tagName === 'TEXTAREA') lista.querySelector(`.ficha[data-id="${CSS.escape(focoId)}"] textarea`)?.focus();
+  lista.scrollTop = pos;
 }
 
 async function agir(btn) {
@@ -87,7 +93,8 @@ async function agir(btn) {
     else if (acao === 'postado') await api.post(base + '/evento', { tipo: 'postado' });
     else if (acao === 'tentar') await api.post(base + '/evento', { tipo: 'tentar-de-novo' });
     else if (acao === 'pular-postagem') await api.post(base + '/evento', { tipo: 'pular', sala: 'postagem' });
-    else if (acao === 'copiar') { await navigator.clipboard.writeText(`${v.postagem.legenda}\n\n${v.postagem.hashtags.join(' ')}`); btn.textContent = 'Copiada!'; }
+    else if (acao === 'copiar') { await navigator.clipboard.writeText(`${v.postagem?.legenda ?? ""}\n\n${(v.postagem?.hashtags || []).join(' ')}`); btn.textContent = 'Copiada!'; }
+    if (acao === 'revisar' || acao === 'aprovar') rascunhos.delete(id);
     if (acao === 'aprovar' && window.Notification?.permission === 'default') Notification.requestPermission();
   } catch (e) { alert(e.message); }
   finally { btn.disabled = false; document.activeElement?.blur(); }
@@ -103,8 +110,19 @@ function criarPlacas(ESC) {
     const el = document.createElement('div'); el.className = 'placa-sala'; el.dataset.sala = k; document.body.appendChild(el); placas[k] = el;
     el.addEventListener('click', ev => { if (ev.target.dataset.acao === 'checar') api.post('/api/checagem').catch(e => alert(e.message)); });
   }
-  const canto = k => { const L = LAYOUT[k]; return new THREE.Vector3(L.pos[0] - L.w / 2, 5, L.pos[1] - L.d / 2); };
-  ESC.aoTick(() => { for (const k of ORDEM) { const [x, y] = ESC.toScreen(canto(k)); placas[k].style.left = x + 'px'; placas[k].style.top = y + 'px'; } });
+  const ponto = (x, z) => ESC.toScreen(new THREE.Vector3(x, 0, z));
+  ESC.aoTick(() => {
+    const [cx, cy] = ponto(LAYOUT.cerebro.pos[0], LAYOUT.cerebro.pos[1]);
+    for (const k of ORDEM) {
+      const L = LAYOUT[k], [ix, iy] = ponto(L.pos[0], L.pos[1]);
+      let dx = ix - cx, dy = iy - cy; const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+      let meio = 0;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const [px, py] = ponto(L.pos[0] + sx * L.w / 2, L.pos[1] + sz * L.d / 2); meio = Math.max(meio, Math.hypot(px - ix, py - iy)); }
+      const d = meio + 6;
+      placas[k].style.left = (ix + dx * d) + 'px'; placas[k].style.top = (iy + dy * d) + 'px';
+      placas[k].style.transform = `translate(${-50 + 50 * dx}%, ${-50 + 50 * dy}%)`;
+    }
+  });
   return e => {
     for (const s of e.salas) {
       const el = placas[s.chave]; el.dataset.estado = s.estado;
@@ -121,11 +139,14 @@ export function iniciarPainel(ESC) {
   $('#lista').addEventListener('click', e => { const b = e.target.closest('button[data-acao]'); if (b) agir(b); });
   $('#ja-gravei').addEventListener('click', () => $('#arquivo').click());
   $('#arquivo').addEventListener('change', async e => { const f = e.target.files[0]; if (f) { try { await api.upload(f); } catch (err) { alert(err.message); } } e.target.value = ''; });
-  addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('soltando'); });
+  const arquivos = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  $('#lista').addEventListener('input', e => { const t = e.target.closest('textarea[data-campo]'); if (t) rascunhos.set(t.closest('.ficha').dataset.id, t.value); });
+  $('#lista').addEventListener('toggle', e => { if (e.target.tagName === 'DETAILS') concluidosAberto = e.target.open; }, true);
+  addEventListener('dragover', e => { if (!arquivos(e)) return; e.preventDefault(); document.body.classList.add('soltando'); });
   addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('soltando'); });
-  addEventListener('drop', async e => { e.preventDefault(); document.body.classList.remove('soltando'); for (const f of e.dataTransfer.files) { try { await api.upload(f); } catch (err) { alert(err.message); } } });
+  addEventListener('drop', async e => { if (!arquivos(e)) return; e.preventDefault(); document.body.classList.remove('soltando'); for (const f of e.dataTransfer.files) { try { await api.upload(f); } catch (err) { alert(err.message); } } });
   $('#modal-fechar').addEventListener('click', fecharModal);
-  addEventListener('keydown', e => { if (e.key.toLowerCase() === 'l' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) { document.body.classList.toggle('limpo'); ESC.enquadrar(); } });
+  addEventListener('keydown', e => { if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) && !document.activeElement?.isContentEditable) { document.body.classList.toggle('limpo'); ESC.enquadrar(); } });
   ESC.aoClicarSala(k => { const v = ESC.ultimoEstado?.videos.find(x => salaDaEtapa(x.etapa) === k); if (v) document.querySelector(`.ficha[data-id="${CSS.escape(v.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   const ciclo = async () => {
     try {
