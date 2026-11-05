@@ -30,9 +30,25 @@ await page.waitForFunction(() => window.ESC.ultimoEstado?.videos?.[0]?.etapa ===
 ok(await page.evaluate(() => window.ESC.salas.edicao.estado) === 'esperando', 'robô da Edição esperando você');
 ok(await page.evaluate(() => window.ESC.salas.pesquisa.estado) === 'inativa', 'Pesquisa inativa nesta etapa');
 ok(await page.evaluate(() => !!window.ESC.salas.postagem.decor.getObjectByName('antena')), 'antena na Postagem');
-// (checagens das Tasks 12 e 13 entram aqui)
-await page.waitForTimeout(1500);
+await page.waitForSelector('.placa-sala[data-sala="edicao"]');
+ok(await page.locator('.placa-sala').count() === 6, 'seis placas de sala');
+ok((await page.locator('.placa-sala[data-sala="pesquisa"]').innerText()).includes('Chega na próxima atualização'), 'placa da Pesquisa avisa que vem depois');
+const id = await page.evaluate(() => window.ESC.ultimoEstado.videos[0].id);
+await page.click(`.ficha[data-id="${id}"] [data-acao="painel"]`);
+await page.waitForSelector('#modal iframe[src="http://localhost:4517/"]');
+await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id === i)?.etapa === 'aprovacao-video', id, { timeout: 15000 });
+await page.waitForTimeout(2000);
+ok(await page.locator('#modal.aberto').count() === 0, 'modal do painel fecha quando as escolhas chegam');
+await page.click(`.ficha[data-id="${id}"] [data-acao="aprovar"]`);
+await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id === i)?.etapa === 'aprovacao-pacote', id, { timeout: 15000 });
+await page.waitForTimeout(2000);
+ok((await page.locator(`.ficha[data-id="${id}"]`).innerText()).includes('Legenda de teste'), 'legenda aparece pra aprovar');
+await page.waitForTimeout(1000);
 await page.screenshot({ path: saida });
+await page.keyboard.press('l');
+ok(await page.evaluate(() => document.body.classList.contains('limpo')), 'tecla L liga o modo limpo');
+await page.waitForTimeout(500);
+await page.screenshot({ path: saida.replace('.png', '-limpo.png') });
 } finally { await browser.close(); app.fechar(); }
 ok(erros.length === 0, 'sem erros no console: ' + erros.join(' | '));
 for (const [c, m] of checks) console.log(c ? '✓' : '✗', m);

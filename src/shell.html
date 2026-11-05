@@ -11,12 +11,56 @@
   #hud { position: fixed; inset: 0; pointer-events: none; }
   #topbar { position: fixed; top: 0; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 20px; background: rgba(253,255,248,.86); backdrop-filter: blur(8px); border-bottom: 1px solid var(--hair); z-index: 5; }
   #topbar .marca { font-weight: 800; font-size: 15px; letter-spacing: -.02em; }
+  #painel { position: fixed; top: 64px; right: 14px; bottom: 14px; width: 400px; overflow: auto; background: #fff; border: 1px solid var(--hair); border-radius: 14px; box-shadow: 0 10px 30px rgba(21,20,20,.06); z-index: 4; padding: 16px; box-sizing: border-box; }
+  body.limpo #painel, body.limpo .placa-sala { display: none; }
+  .portas { display: flex; gap: 8px; margin-bottom: 14px; }
+  .portas button { flex: 1; }
+  button { font: 600 13px var(--ui); border-radius: 9px; border: 1px solid var(--hair); background: #fff; padding: 9px 12px; cursor: pointer; }
+  button.forte { background: var(--ink); color: #fff; border-color: var(--ink); }
+  button:disabled { opacity: .45; cursor: default; }
+  .grupo { font: 700 11px var(--ui); letter-spacing: .08em; color: var(--grey); margin: 16px 0 8px; text-transform: uppercase; }
+  .ficha { border: 1px solid var(--hair); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .ficha.espera { border-color: #F2B84B; box-shadow: 0 0 0 3px rgba(242,184,75,.15); }
+  .ficha h3 { margin: 0 0 6px; font-size: 14px; }
+  .trilha { display: flex; gap: 6px; margin: 6px 0 8px; }
+  .trilha i { width: 10px; height: 10px; border-radius: 50%; background: #E3E3DE; }
+  .trilha i.feita { background: var(--ink); } .trilha i.aqui { background: #F2B84B; animation: pulsa 1s infinite alternate; } .trilha i.pulada { background: transparent; border: 1px dashed #CCC; box-sizing: border-box; }
+  @keyframes pulsa { to { transform: scale(1.35); } }
+  .etapa { font-size: 13px; color: var(--grey); }
+  .erro { color: #B3261E; font-size: 13px; margin: 6px 0; }
+  .acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .ficha textarea { width: 100%; box-sizing: border-box; font: 13px var(--ui); border: 1px solid var(--hair); border-radius: 8px; padding: 8px; margin-top: 8px; }
+  .legenda { white-space: pre-wrap; font-size: 13px; background: #FAFAF7; border-radius: 8px; padding: 8px; margin-top: 8px; max-height: 160px; overflow: auto; }
+  .barra { height: 6px; background: #EEE; border-radius: 3px; margin-top: 6px; } .barra b { display: block; height: 100%; background: var(--ink); border-radius: 3px; }
+  .placa-sala { position: fixed; transform: translate(-50%, -100%); background: #fff; border: 1px solid var(--hair); border-radius: 12px; padding: 10px 12px; min-width: 150px; font-size: 12px; pointer-events: auto; z-index: 3; }
+  .placa-sala b { display: flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: .06em; }
+  .placa-sala b::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #BBB); }
+  .placa-sala[data-estado="trabalhando"] { --c: #2BB673; } .placa-sala[data-estado="esperando"] { --c: #F2B84B; } .placa-sala[data-estado="problema"] { --c: #E5484D; }
+  .placa-sala .linha { color: var(--grey); margin: 4px 0; max-width: 200px; }
+  .placa-sala .num { display: flex; justify-content: space-between; gap: 10px; }
+  #modal { position: fixed; inset: 0; background: rgba(21,20,20,.35); display: none; align-items: center; justify-content: center; z-index: 10; }
+  #modal.aberto { display: flex; }
+  #modal .caixa { width: min(1100px, 92vw); height: 86vh; background: #fff; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  #modal .topo { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--hair); font-size: 13px; }
+  #modal iframe { flex: 1; border: 0; width: 100%; }
+  #soltar { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(253,255,248,.85); font: 700 22px var(--ui); z-index: 20; border: 3px dashed var(--ink); }
+  body.soltando #soltar { display: flex; }
 </style>
 </head>
 <body>
 <div id="topbar"><span class="marca">ESCRITÓRIO DE CONTEÚDO</span></div>
 <canvas id="scene"></canvas>
 <div id="hud"></div>
+<aside id="painel">
+  <div class="portas">
+    <button id="tenho-ideia" disabled title="Chega na próxima atualização">Tenho uma ideia</button>
+    <button id="ja-gravei" class="forte">Já gravei</button>
+  </div>
+  <input id="arquivo" type="file" accept="video/*" hidden>
+  <div id="lista"></div>
+</aside>
+<div id="modal"><div class="caixa"><div class="topo"><span>Escolha formato e estilo do vídeo</span><span><a id="modal-aba" target="_blank" rel="noopener">abrir em outra aba</a> · <button id="modal-fechar">Fechar</button></span></div><iframe title="Painel da Máquina de Edição"></iframe></div></div>
+<div id="soltar">Solte o vídeo bruto aqui</div>
 <!--APP-->
 </body>
 </html>
