@@ -18,15 +18,22 @@ for (const channel of ['chrome', 'msedge']) { try { browser = await chromium.lau
 if (!browser) { console.error('Precisa do Chrome ou do Edge instalado pro teste de fumaça.'); process.exit(1); }
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const erros = []; page.on('pageerror', e => erros.push(e.message)); page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
-await page.goto(url); await page.waitForFunction(() => window.ESC && Object.keys(window.ESC.salas).length === 6, null, { timeout: 15000 });
 const checks = [];
 const ok = (cond, msg) => { checks.push([cond, msg]); };
+const saida = path.join(os.tmpdir(), 'escritorio-fumaca.png');
+try {
+await page.goto(url); await page.waitForFunction(() => window.ESC && Object.keys(window.ESC.salas).length === 6, null, { timeout: 15000 });
 ok(await page.evaluate(() => Object.keys(window.ESC.salas).join(',')) === 'pesquisa,roteiro,edicao,capa,postagem,analise', 'seis salas na ordem');
 ok(await page.evaluate(() => window.ESC.anel.length) === 6, 'anel com seis passarelas');
+fs.writeFileSync(path.join(app.caixa.store.caixaDir, 'aula.mp4'), 'x'); app.caixa.varrer(); app.caixa.varrer();
+await page.waitForFunction(() => window.ESC.ultimoEstado?.videos?.[0]?.etapa === 'escolhas-edicao', null, { timeout: 15000 });
+ok(await page.evaluate(() => window.ESC.salas.edicao.estado) === 'esperando', 'robô da Edição esperando você');
+ok(await page.evaluate(() => window.ESC.salas.pesquisa.estado) === 'inativa', 'Pesquisa inativa nesta etapa');
+ok(await page.evaluate(() => !!window.ESC.salas.postagem.decor.getObjectByName('antena')), 'antena na Postagem');
 // (checagens das Tasks 12 e 13 entram aqui)
 await page.waitForTimeout(1500);
-const saida = path.join(os.tmpdir(), 'escritorio-fumaca.png'); await page.screenshot({ path: saida });
-await browser.close(); app.fechar();
+await page.screenshot({ path: saida });
+} finally { await browser.close(); app.fechar(); }
 ok(erros.length === 0, 'sem erros no console: ' + erros.join(' | '));
 for (const [c, m] of checks) console.log(c ? '✓' : '✗', m);
 console.log('captura:', saida);

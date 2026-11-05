@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mat, rbox, makePlinth, makeDesk, makeChair, makeRobot, poseWork, makeNeuralBrain, makeWalkway, makeWarnSprite } from './builders.js';
 import { LAYOUT, ORDEM, CORES, ROBOS } from './layout.js';
 import { criarTela } from './tela.js';
+import { decorar } from './decor.js';
 
 /* ---------- renderer / camera: same iso rig as the Oficina (main.js lines 24–71 there) ---------- */
 const canvas = document.getElementById('scene');
@@ -84,6 +85,7 @@ for (const k of ORDEM) {
   const aviso = makeWarnSprite(); aviso.visible = false; aviso.position.copy(assento).add(new THREE.Vector3(0, 6.2, 0)); scene.add(aviso);
   salas[k] = { grupo: ilhas[k].grupo, robo, tela, aviso, estacao, assento, pe: assento.clone().add(rot(new THREE.Vector3(1.5, 0, 0.15))),
     centro: new THREE.Vector3(L.pos[0], 0, L.pos[1]), estado: 'ocioso', bob: Math.random() * 10 };
+  const enfeite = decorar(k, cor.chip); ilhas[k].grupo.add(enfeite); salas[k].decor = enfeite;
 }
 
 /* ---------- picking ---------- */
