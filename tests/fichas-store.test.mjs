@@ -30,7 +30,7 @@ test('salvar is atomic and carregar/listar read it back, newest first', () => {
 
 test('idValido rejects traversal and odd characters', () => {
   const s = new FichasStore(tmp());
-  for (const bad of ['../x', 'a/b', 'A', '', 'a..b', 'a\b']) assert.equal(s.idValido(bad), false, bad);
+  for (const bad of ['../x', 'a/b', 'A', '', 'a..b', 'a\\b']) assert.equal(s.idValido(bad), false, bad);
   assert.equal(s.idValido('2026-11-05-video-2'), true);
   assert.equal(s.carregar('../x'), null);
 });
