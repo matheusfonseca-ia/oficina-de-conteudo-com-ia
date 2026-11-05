@@ -1,0 +1,4 @@
+node_modules/
+dist/*
+!dist/escritorio.html
+.DS_Store

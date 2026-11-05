@@ -1,0 +1,16 @@
+{
+  "name": "escritorio-de-conteudo",
+  "version": "0.1.0",
+  "description": "Escritório de Conteúdo — seis salas de agentes que levam o seu vídeo do bruto ao post, com a Máquina de Edição",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node serve.mjs",
+    "build": "node build.mjs",
+    "check": "node check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "fumaca": "node scripts/fumaca.mjs"
+  },
+  "engines": { "node": ">=22.13" },
+  "devDependencies": { "esbuild": "^0.28.1", "three": "^0.185.1", "playwright-core": "^1.62.0" }
+}
