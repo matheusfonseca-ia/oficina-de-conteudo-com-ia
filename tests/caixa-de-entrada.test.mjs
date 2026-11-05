@@ -111,3 +111,13 @@ test('a failed salvar puts the bruto back in the caixa and leaves no folder', ()
   assert.equal(caixa.varrer().length, 1);
   assert.equal(criadas.length, 1);
 });
+
+test('varrer({ confiar }) skips the first sighting only for the trusted file', () => {
+  const { caixa, em } = montar();
+  fs.writeFileSync(em('crescendo.mp4'), 'abc');
+  fs.writeFileSync(em('pronto.mp4'), 'xyz');
+  const criadas = caixa.varrer({ confiar: 'pronto.mp4' });
+  assert.equal(criadas.length, 1);
+  assert.equal(criadas[0].tema, 'pronto');
+  assert.equal(fs.existsSync(em('crescendo.mp4')), true);
+});

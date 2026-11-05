@@ -14,6 +14,7 @@ async function subir(t) {
   const config = loadConfig({ ESC_DATA: dados, PORT: '0', ESC_CLAUDE_COMMAND: process.execPath, ESC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
   const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0 });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
+  app.iniciar();
   const base = `http://127.0.0.1:${app.server.address().port}`;
   t.after(() => app.fechar());
   const post = (p, body, headers = {}) => fetch(base + p, { method: 'POST', headers: { 'x-escritorio': '1', 'content-type': 'application/json', ...headers }, body: typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body ?? {}) });
@@ -74,5 +75,46 @@ test('studio: a dead Studio URL is reopened with REABRIR_STUDIO', { timeout: 200
     const { url } = await (await post(`/api/videos/${id}/studio`)).json();
     assert.equal(url, 'http://127.0.0.1:9/'); // a porta 9 não responde → reabriu
     assert.match(fs.readFileSync(log, 'utf8'), /REABRIR_STUDIO/);
+  } finally { delete process.env.ESC_TEST_LOG; }
+});
+
+test('forbidden event and non-video upload are refused with 400', async t => {
+  const { post, ate } = await subir(t);
+  assert.equal((await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': 'nota.txt', 'content-type': 'application/octet-stream' })).status, 400);
+  assert.equal((await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': '%E0%A4%A', 'content-type': 'application/octet-stream' })).status, 400);
+  await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': 'c.mp4', 'content-type': 'application/octet-stream' });
+  const e = await ate(e => e.videos[0]?.etapa === 'escolhas-edicao');
+  const id = e.videos[0].id;
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'concluiu' })).status, 400);
+  assert.equal((await post(`/api/videos/${id}/evento`, 'null')).status, 400);
+  assert.equal((await post(`/api/videos/${id}/evento`, '{x')).status, 400);
+  assert.equal((await post('/api/videos/%E0%A4%A/evento', {})).status, 404);
+});
+
+test('an aborted upload leaves no .parcial file behind', async t => {
+  const { base, app } = await subir(t);
+  const http = await import('node:http');
+  const req = http.request(base + '/api/upload', { method: 'POST', headers: { 'x-escritorio': '1', 'x-nome-arquivo': 'x.mp4', 'content-length': '1000' } });
+  req.on('error', () => {});
+  req.write(Buffer.alloc(100));
+  await new Promise(r => setTimeout(r, 150));
+  req.destroy();
+  await new Promise(r => setTimeout(r, 400));
+  const sobras = fs.readdirSync(app.caixa.store.caixaDir).filter(n => n.startsWith('.parcial-'));
+  assert.deepEqual(sobras, []);
+});
+
+test('two simultaneous /studio calls open the Studio only once', { timeout: 20000 }, async t => {
+  const { post, ate, dados } = await subir(t);
+  await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': 'd.mp4', 'content-type': 'application/octet-stream' });
+  const e = await ate(e => e.videos[0]?.etapa === 'escolhas-edicao');
+  const id = e.videos[0].id;
+  await post(`/api/videos/${id}/painel`);
+  await ate(e => e.videos[0].etapa === 'aprovacao-video');
+  const log = path.join(dados, 'log2.jsonl'); process.env.ESC_TEST_LOG = log;
+  try {
+    const [a, b] = await Promise.all([post(`/api/videos/${id}/studio`), post(`/api/videos/${id}/studio`)]);
+    assert.equal(a.status, 200); assert.equal(b.status, 200);
+    assert.equal((fs.readFileSync(log, 'utf8').match(/REABRIR_STUDIO/g) || []).length, 1);
   } finally { delete process.env.ESC_TEST_LOG; }
 });
