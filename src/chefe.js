@@ -21,7 +21,7 @@ export function makeIlhaRedonda(R, floorColor) {
 // A geodesic half-sphere of lines and nodes over the whole island.
 export function makeDomo(R) {
   const g = new THREE.Group();
-  const geo = new THREE.IcosahedronGeometry(R, 4);
+  const geo = new THREE.IcosahedronGeometry(R, 3); // 3, not 4: an open mesh so the boss reads through it
   const pos = geo.getAttribute('position');
   const pontos = [], porChave = new Map(), idx = [];
   for (let i = 0; i < pos.count; i++) {
