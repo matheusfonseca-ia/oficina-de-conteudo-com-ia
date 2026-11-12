@@ -1,4 +1,4 @@
-// Escritório de Conteúdo — local server. npm start → http://localhost:4540
+// Oficina de Conteúdo — local server. npm start → http://localhost:4540
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,10 +72,10 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
   const server = http.createServer(async (req, res) => {
     try {
       if (!hostOk(req)) return json(res, 403, { erro: 'Acesso só por este computador.' });
-      if (req.method === 'POST' && req.headers['x-escritorio'] !== '1') return json(res, 403, { erro: 'Requisição recusada.' });
+      if (req.method === 'POST' && req.headers['x-oficina'] !== '1') return json(res, 403, { erro: 'Requisição recusada.' });
       const url = new URL(req.url, 'http://127.0.0.1');
-      if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/escritorio.html')) {
-        const pagina = path.join(ROOT, 'dist', 'escritorio.html');
+      if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/oficina.html')) {
+        const pagina = path.join(ROOT, 'dist', 'oficina.html');
         if (!fs.existsSync(pagina)) return json(res, 500, { erro: 'Página não construída. Rode: npm run build' });
         return enviar(res, pagina, { 'content-type': 'text/html; charset=utf-8' });
       }
@@ -158,11 +158,11 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const url = `http://localhost:${config.porta}`;
   const app = criarServidor({ config });
   app.server.on('error', e => {
-    if (e.code === 'EADDRINUSE') { console.log(`O escritório já está aberto em ${url}`); if (process.argv.includes('--abrir')) abrirNavegador(url); process.exit(0); }
+    if (e.code === 'EADDRINUSE') { console.log(`A Oficina já está aberta em ${url}`); if (process.argv.includes('--abrir')) abrirNavegador(url); process.exit(0); }
     throw e;
   });
   app.server.listen(config.porta, '127.0.0.1', () => {
-    console.log(`Escritório de Conteúdo ${versao} → ${url}`);
+    console.log(`Oficina de Conteúdo ${versao} → ${url}`);
     console.log(`  dados: ${config.dados}`);
     app.iniciar(); // retoma o trabalho e confere as ferramentas só depois de ter a porta
     if (process.argv.includes('--abrir')) abrirNavegador(url);

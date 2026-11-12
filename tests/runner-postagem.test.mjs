@@ -43,13 +43,13 @@ test('rodarPostagem reads edit/resumo.md and cerebro/perfil.md and returns the p
   const pasta = path.join(dados, 'v'); fs.mkdirSync(path.join(pasta, 'edit'), { recursive: true });
   fs.writeFileSync(path.join(pasta, 'edit', 'resumo.md'), 'Tema: teste');
   fs.mkdirSync(path.join(dados, 'cerebro')); fs.writeFileSync(path.join(dados, 'cerebro', 'perfil.md'), 'Tom: direto');
-  const log = path.join(dados, 'log.jsonl'); process.env.ESC_TEST_LOG = log;
+  const log = path.join(dados, 'log.jsonl'); process.env.OFC_TEST_LOG = log;
   try {
     const r = await rodarPostagem({ pastaVideo: pasta, ficha: { revisao: null }, cerebroDir: path.join(dados, 'cerebro'), config, agora: AGORA });
     assert.equal(r.legenda, 'Legenda de teste');
     const prompt = JSON.parse(fs.readFileSync(log, 'utf8').trim()).args[1];
     assert.ok(prompt.includes('Tema: teste') && prompt.includes('Tom: direto'));
-  } finally { delete process.env.ESC_TEST_LOG; }
+  } finally { delete process.env.OFC_TEST_LOG; }
 });
 
 test('rodarPostagem without resumo.md fails clearly', async () => {

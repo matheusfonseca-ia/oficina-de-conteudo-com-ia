@@ -8,7 +8,7 @@ import { criarServidor } from '../serve.mjs';
 import { loadConfig } from '../config.mjs';
 
 const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-fumaca-'));
-const config = loadConfig({ ESC_DATA: dados, ESC_CLAUDE_COMMAND: process.execPath, ESC_CLAUDE_PREFIX_ARGS: JSON.stringify([path.resolve('tests/fixtures/claude-falso.mjs')]) });
+const config = loadConfig({ OFC_DATA: dados, OFC_CLAUDE_COMMAND: process.execPath, OFC_CLAUDE_PREFIX_ARGS: JSON.stringify([path.resolve('tests/fixtures/claude-falso.mjs')]) });
 const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: path.resolve('tests/fixtures/painel-falso.mjs'), intervaloCaixa: 0 });
 await new Promise(r => app.server.listen(0, '127.0.0.1', r));
 app.iniciar();
@@ -20,7 +20,7 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const erros = []; page.on('pageerror', e => erros.push(e.message)); page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
 const checks = [];
 const ok = (cond, msg) => { checks.push([cond, msg]); };
-const saida = path.join(os.tmpdir(), 'escritorio-fumaca.png');
+const saida = path.join(os.tmpdir(), 'oficina-fumaca.png');
 try {
 await page.goto(url); await page.waitForFunction(() => window.ESC && Object.keys(window.ESC.salas).length === 6, null, { timeout: 15000 });
 ok(await page.evaluate(() => Object.keys(window.ESC.salas).join(',')) === 'pesquisa,roteiro,edicao,capa,postagem,analise', 'seis salas na ordem');
@@ -49,7 +49,7 @@ await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id ==
 await page.waitForTimeout(2000);
 ok((await page.locator(`.ficha[data-id="${id}"]`).innerText()).includes('Legenda de teste'), 'legenda aparece pra aprovar');
 ok(await page.locator(`.ficha[data-id="${id}"] a.botao:has-text("Baixar vídeo")`).count() === 1, 'Baixar vídeo já aparece na aprovação do post');
-ok(await page.locator('#fechado').isHidden(), 'aviso de escritório fechado escondido enquanto ele responde');
+ok(await page.locator('#fechado').isHidden(), 'aviso de Oficina fechada escondido enquanto ele responde');
 await page.waitForTimeout(1000);
 await page.screenshot({ path: saida });
 await page.keyboard.press('l');
@@ -67,7 +67,7 @@ await page.waitForTimeout(500);
 const sel = await page.evaluate(s => { const t = document.querySelector(s); return { foco: document.activeElement === t, ini: t.selectionStart, fim: t.selectionEnd, valor: t.value }; }, campo);
 ok(sel.foco && sel.ini === 5 && sel.fim === 10 && sel.valor === 'mais curta e direta', `cursor do campo de ajuste fica no lugar depois do repinte (${JSON.stringify(sel)})`);
 await app.fechar();
-await page.waitForSelector('#fechado', { state: 'visible', timeout: 10000 }).then(() => ok(true, 'aviso aparece quando o escritório fecha'), () => ok(false, 'aviso aparece quando o escritório fecha'));
+await page.waitForSelector('#fechado', { state: 'visible', timeout: 10000 }).then(() => ok(true, 'aviso aparece quando a Oficina fecha'), () => ok(false, 'aviso aparece quando a Oficina fecha'));
 erros.splice(0, erros.length, ...erros.filter(m => !/Failed to load resource|ERR_CONNECTION_REFUSED/.test(m))); // o servidor fechado de propósito
 } finally { await browser.close(); app.fechar(); }
 ok(erros.length === 0, 'sem erros no console: ' + erros.join(' | '));

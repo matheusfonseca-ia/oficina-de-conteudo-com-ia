@@ -1,4 +1,4 @@
 node_modules/
 dist/*
-!dist/escritorio.html
+!dist/oficina.html
 .DS_Store

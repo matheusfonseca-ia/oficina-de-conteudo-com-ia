@@ -119,7 +119,7 @@ test('pararTudo kills the running Claude child and leaves the ficha without erro
   const config = { claude: { command: process.execPath, prefixArgs: [FAKE] }, skillsDir: '/s', maquinaDir: '/m', modeloEdicao: null };
   const { store, o, nova } = montar({}, config);
   const arqPid = path.join(os.tmpdir(), `esc-pid-${process.pid}-${Date.now()}`);
-  process.env.ESC_TEST_MODO = 'lento'; process.env.ESC_TEST_PID = arqPid;
+  process.env.OFC_TEST_MODO = 'lento'; process.env.OFC_TEST_PID = arqPid;
   try {
     nova('a'); o.acordar();
     for (let i = 0; i < 200 && !fs.existsSync(arqPid); i++) await new Promise(r => setTimeout(r, 25));
@@ -130,7 +130,7 @@ test('pararTudo kills the running Claude child and leaves the ficha without erro
     const f = store.carregar('a'); assert.equal(f.erro, null); assert.equal(f.etapa, 'bruto-recebido');
     assert.equal(o.rodando.size, 0);
     o.acordar(); assert.equal(o.rodando.size, 0); // depois de parar, nada novo começa
-  } finally { delete process.env.ESC_TEST_MODO; delete process.env.ESC_TEST_PID; fs.rmSync(arqPid, { force: true }); }
+  } finally { delete process.env.OFC_TEST_MODO; delete process.env.OFC_TEST_PID; fs.rmSync(arqPid, { force: true }); }
 });
 
 test('a Studio URL belongs to one video: a new run with the same URL clears it on the others', async () => {

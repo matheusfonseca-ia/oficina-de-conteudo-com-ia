@@ -1,18 +1,18 @@
 // Test fixture: stands in for `claude`. Never touches the network.
 // Edição: reads the /maquina-de-edicao command and writes edit/estado.json in cwd.
-// Postagem: answers with ESC_TEST_POSTAGEM (raw text) or a valid JSON.
+// Postagem: answers with OFC_TEST_POSTAGEM (raw text) or a valid JSON.
 import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
 const val = f => { const i = args.indexOf(f); return i < 0 ? null : args[i + 1]; };
 const prompt = val('-p') || '';
-if (process.env.ESC_TEST_LOG) fs.appendFileSync(process.env.ESC_TEST_LOG, JSON.stringify({ args, cwd: process.cwd() }) + '\n');
+if (process.env.OFC_TEST_LOG) fs.appendFileSync(process.env.OFC_TEST_LOG, JSON.stringify({ args, cwd: process.cwd() }) + '\n');
 const emit = e => process.stdout.write(JSON.stringify(e) + '\n');
 emit({ type: 'system', subtype: 'init', session_id: val('--session-id') || val('--resume') || 'x' });
-const modo = process.env.ESC_TEST_MODO || 'ok';
+const modo = process.env.OFC_TEST_MODO || 'ok';
 if (modo === 'sem-resultado') process.exit(0);
-// lento: grava o próprio PID em ESC_TEST_PID e fica rodando (pra testar o fechamento do escritório).
-if (modo === 'lento') { if (process.env.ESC_TEST_PID) fs.writeFileSync(process.env.ESC_TEST_PID, String(process.pid)); setTimeout(() => {}, 120000); }
+// lento: grava o próprio PID em OFC_TEST_PID e fica rodando (pra testar o fechamento da Oficina).
+if (modo === 'lento') { if (process.env.OFC_TEST_PID) fs.writeFileSync(process.env.OFC_TEST_PID, String(process.pid)); setTimeout(() => {}, 120000); }
 const cmd = modo === 'lento' ? null : prompt.match(/^\/maquina-de-edicao (\S+)/)?.[1];
 if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   const edit = path.join(process.cwd(), 'edit'); fs.mkdirSync(edit, { recursive: true });
@@ -28,6 +28,6 @@ if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   // sem-resultado-feito: gravou o estado certo e saiu sem a mensagem final.
   if (modo !== 'sem-resultado-feito') emit({ type: 'result', subtype: 'success', result: 'feito' });
 } else {
-  const texto = process.env.ESC_TEST_POSTAGEM ?? JSON.stringify({ legenda: 'Legenda de teste', hashtags: ['#ia', '#reels'], horario: '2099-01-01T18:00:00-03:00', motivoHorario: 'fim de tarde' });
+  const texto = process.env.OFC_TEST_POSTAGEM ?? JSON.stringify({ legenda: 'Legenda de teste', hashtags: ['#ia', '#reels'], horario: '2099-01-01T18:00:00-03:00', motivoHorario: 'fim de tarde' });
   emit({ type: 'result', subtype: 'success', result: texto });
 }

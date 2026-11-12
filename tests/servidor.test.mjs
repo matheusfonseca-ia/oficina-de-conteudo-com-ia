@@ -11,13 +11,13 @@ const PAINEL = path.resolve('tests/fixtures/painel-falso.mjs');
 
 async function subir(t) {
   const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-srv-'));
-  const config = loadConfig({ ESC_DATA: dados, PORT: '0', ESC_CLAUDE_COMMAND: process.execPath, ESC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
+  const config = loadConfig({ OFC_DATA: dados, PORT: '0', OFC_CLAUDE_COMMAND: process.execPath, OFC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
   const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0 });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   app.iniciar();
   const base = `http://127.0.0.1:${app.server.address().port}`;
   t.after(() => app.fechar());
-  const post = (p, body, headers = {}) => fetch(base + p, { method: 'POST', headers: { 'x-escritorio': '1', 'content-type': 'application/json', ...headers }, body: typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body ?? {}) });
+  const post = (p, body, headers = {}) => fetch(base + p, { method: 'POST', headers: { 'x-oficina': '1', 'content-type': 'application/json', ...headers }, body: typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body ?? {}) });
   const estado = async () => (await fetch(base + '/api/estado')).json();
   const ate = async (cond) => { for (let i = 0; i < 100; i++) { const e = await estado(); if (cond(e)) return e; await new Promise(r => setTimeout(r, 50)); } throw new Error('timeout'); };
   return { base, post, estado, ate, dados, app };
@@ -44,7 +44,7 @@ test('upload → edição prepara → painel → Studio → aprovar → postagem
   await ate(e => e.videos[0].etapa === 'concluido');
 });
 
-test('POST without x-escritorio, a foreign Host, a bad id or a forbidden event are refused', async t => {
+test('POST without x-oficina, a foreign Host, a bad id or a forbidden event are refused', async t => {
   const { base, post } = await subir(t);
   assert.equal((await fetch(base + '/api/checagem', { method: 'POST' })).status, 403);
   const http = await import('node:http');
@@ -70,12 +70,12 @@ test('studio: a dead Studio URL is reopened with REABRIR_STUDIO', { timeout: 200
   const id = e.videos[0].id;
   await post(`/api/videos/${id}/painel`);
   await ate(e => e.videos[0].etapa === 'aprovacao-video');
-  const log = path.join(dados, 'log.jsonl'); process.env.ESC_TEST_LOG = log;
+  const log = path.join(dados, 'log.jsonl'); process.env.OFC_TEST_LOG = log;
   try {
     const { url } = await (await post(`/api/videos/${id}/studio`)).json();
     assert.equal(url, 'http://127.0.0.1:9/'); // a porta 9 não responde → reabriu
     assert.match(fs.readFileSync(log, 'utf8'), /REABRIR_STUDIO/);
-  } finally { delete process.env.ESC_TEST_LOG; }
+  } finally { delete process.env.OFC_TEST_LOG; }
 });
 
 test('forbidden event and non-video upload are refused with 400', async t => {
@@ -94,7 +94,7 @@ test('forbidden event and non-video upload are refused with 400', async t => {
 test('an aborted upload leaves no .parcial file behind', async t => {
   const { base, app } = await subir(t);
   const http = await import('node:http');
-  const req = http.request(base + '/api/upload', { method: 'POST', headers: { 'x-escritorio': '1', 'x-nome-arquivo': 'x.mp4', 'content-length': '1000' } });
+  const req = http.request(base + '/api/upload', { method: 'POST', headers: { 'x-oficina': '1', 'x-nome-arquivo': 'x.mp4', 'content-length': '1000' } });
   req.on('error', () => {});
   req.write(Buffer.alloc(100));
   await new Promise(r => setTimeout(r, 150));
@@ -111,12 +111,12 @@ test('two simultaneous /studio calls open the Studio only once', { timeout: 2000
   const id = e.videos[0].id;
   await post(`/api/videos/${id}/painel`);
   await ate(e => e.videos[0].etapa === 'aprovacao-video');
-  const log = path.join(dados, 'log2.jsonl'); process.env.ESC_TEST_LOG = log;
+  const log = path.join(dados, 'log2.jsonl'); process.env.OFC_TEST_LOG = log;
   try {
     const [a, b] = await Promise.all([post(`/api/videos/${id}/studio`), post(`/api/videos/${id}/studio`)]);
     assert.equal(a.status, 200); assert.equal(b.status, 200);
     assert.equal((fs.readFileSync(log, 'utf8').match(/REABRIR_STUDIO/g) || []).length, 1);
-  } finally { delete process.env.ESC_TEST_LOG; }
+  } finally { delete process.env.OFC_TEST_LOG; }
 });
 
 test('Host must name this server: right port on 127.0.0.1 or localhost, anything else is refused', async t => {
@@ -132,7 +132,7 @@ test('Host must name this server: right port on 127.0.0.1 or localhost, anything
 
 test('fechar() stops a running edição without marking the video as failed', { timeout: 20000 }, async t => {
   const { post, ate, app, dados } = await subir(t);
-  const arqPid = path.join(dados, 'pid'); process.env.ESC_TEST_MODO = 'lento'; process.env.ESC_TEST_PID = arqPid;
+  const arqPid = path.join(dados, 'pid'); process.env.OFC_TEST_MODO = 'lento'; process.env.OFC_TEST_PID = arqPid;
   try {
     await post('/api/upload', new Uint8Array([1]), { 'x-nome-arquivo': 'e.mp4', 'content-type': 'application/octet-stream' });
     const e = await ate(e => e.videos[0]?.trabalhando && fs.existsSync(arqPid));
@@ -141,5 +141,5 @@ test('fechar() stops a running edição without marking the video as failed', { 
     assert.throws(() => process.kill(pid, 0), /ESRCH/);
     const ficha = JSON.parse(fs.readFileSync(path.join(dados, 'videos', id, 'ficha.json'), 'utf8'));
     assert.equal(ficha.erro, null); assert.equal(ficha.etapa, 'bruto-recebido');
-  } finally { delete process.env.ESC_TEST_MODO; delete process.env.ESC_TEST_PID; }
+  } finally { delete process.env.OFC_TEST_MODO; delete process.env.OFC_TEST_PID; }
 });

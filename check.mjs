@@ -9,8 +9,8 @@ for (const s of salas) {
   ok(LAYOUT[s.chave], `sala ${s.chave} tem lugar na cena`);
   ok(CORES[s.chave]?.chip === s.chip && CORES[s.chave]?.piso === s.piso, `cores da sala ${s.chave} iguais em salas.json e src/layout.js`);
 }
-ok(fs.existsSync('dist/escritorio.html'), 'página construída (npm run build)');
-ok(fs.existsSync('skill/escritorio/SKILL.md'), 'skill /escritorio presente');
+ok(fs.existsSync('dist/oficina.html'), 'página construída (npm run build)');
+ok(fs.existsSync('skill/oficina-de-conteudo/SKILL.md'), 'skill /oficina-de-conteudo presente');
 for (const f of ['lib/claude-runner.mjs', 'lib/execution.mjs', 'src/builders.js']) ok(fs.existsSync(f), `${f} presente (cópia da Oficina)`);
 for (const [c, m] of linhas) console.log(c ? '✓' : '✗', m);
 process.exit(linhas.every(([c]) => c) ? 0 : 1);

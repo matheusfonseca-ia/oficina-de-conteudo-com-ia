@@ -44,17 +44,17 @@ test('rodarEdicao PREPARAR with a new session returns the state and the session 
 });
 
 test('rodarEdicao fails in pt-BR when the Máquina reports an error', async () => {
-  const p = pasta(); process.env.ESC_TEST_MODO = 'erro';
+  const p = pasta(); process.env.OFC_TEST_MODO = 'erro';
   try {
     await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.montar, config }), /Falta instalar o FFmpeg/);
-  } finally { delete process.env.ESC_TEST_MODO; }
+  } finally { delete process.env.OFC_TEST_MODO; }
 });
 
 test('rodarEdicao fails clearly when estado.json is missing, corrupted or Claude returns nothing', async () => {
   for (const [modo, msg] of [['sem-estado', /não deixou o andamento/], ['corrompido', /não deixou o andamento/], ['sem-resultado', /resultado/]]) {
-    const p = pasta(); process.env.ESC_TEST_MODO = modo;
+    const p = pasta(); process.env.OFC_TEST_MODO = modo;
     try { await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config }), msg, modo); }
-    finally { delete process.env.ESC_TEST_MODO; }
+    finally { delete process.env.OFC_TEST_MODO; }
   }
 });
 
@@ -70,10 +70,10 @@ test('rodarEdicao ignores a stale estado.json left by a previous run', async () 
   fs.writeFileSync(antigo, JSON.stringify({ etapa: 'revisao', studioUrl: 'http://velho' }));
   const velho = new Date('2020-01-01T00:00:00Z');
   fs.utimesSync(antigo, velho, velho);
-  process.env.ESC_TEST_MODO = 'sem-estado';
+  process.env.OFC_TEST_MODO = 'sem-estado';
   try {
     await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.reabrir, config }), /não deixou o andamento/);
-  } finally { delete process.env.ESC_TEST_MODO; }
+  } finally { delete process.env.OFC_TEST_MODO; }
 });
 
 test('rodarEdicao REVISAR: keeps the prefix and reaches revisao', async () => {
@@ -114,9 +114,9 @@ test('rodarEdicao runs the child without CLAUDECODE in its env', async () => {
 
 test('EXPORTAR without edit/final.mp4 or edit/resumo.md fails in pt-BR', async () => {
   for (const [modo, msg] of [['sem-mp4', /sem o MP4 final \(edit\/final\.mp4\)/], ['sem-resumo', /sem o resumo do vídeo \(edit\/resumo\.md\)/]]) {
-    const p = pasta(); process.env.ESC_TEST_MODO = modo;
+    const p = pasta(); process.env.OFC_TEST_MODO = modo;
     try { await assert.rejects(rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config }), msg, modo); }
-    finally { delete process.env.ESC_TEST_MODO; }
+    finally { delete process.env.OFC_TEST_MODO; }
   }
 });
 
@@ -131,11 +131,11 @@ test('EXPORTAR with an empty final.mp4 fails', async () => {
 });
 
 test('a run that ends without a result but wrote the expected fresh estado.json counts as done', async () => {
-  const p = pasta(); process.env.ESC_TEST_MODO = 'sem-resultado-feito';
+  const p = pasta(); process.env.OFC_TEST_MODO = 'sem-resultado-feito';
   try {
     const r = await rodarEdicao({ pastaVideo: p, ficha: { id: 'v1', edicao: { sessao: 's' } }, comando: COMANDOS.exportar, config });
     assert.equal(r.estado.etapa, 'exportado');
-  } finally { delete process.env.ESC_TEST_MODO; }
+  } finally { delete process.env.OFC_TEST_MODO; }
 });
 
 test('a run that ends without a result and a stale or wrong estado.json still fails', async () => {

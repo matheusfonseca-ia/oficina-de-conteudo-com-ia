@@ -1,5 +1,5 @@
 {
-  "_sobre": "As seis salas do Escritório de Conteúdo, em ordem horária. 'ativa: false' = sala ainda não liberada nesta versão.",
+  "_sobre": "As seis salas da Oficina de Conteúdo, em ordem horária. 'ativa: false' = sala ainda não liberada nesta versão.",
   "salas": [
     { "chave": "pesquisa", "nome": "PESQUISA", "ordem": 1, "ativa": false, "chip": "#8FD3F4", "ink": "#2E86AB", "piso": "#E6F4FB", "led": "#1ACDFF", "contador": { "rotulo": "Referências", "etapas": [] } },
     { "chave": "roteiro",  "nome": "ROTEIRO",  "ordem": 2, "ativa": false, "chip": "#5ADEB7", "ink": "#1E9070", "piso": "#E9F6EF", "led": "#1AFF9F", "contador": { "rotulo": "Roteiros", "etapas": [] } },

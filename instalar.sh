@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Instalador do Escritório de Conteúdo (Mac/Linux). Rode de dentro da pasta baixada: bash instalar.sh
+# Instalador da Oficina de Conteúdo (Mac/Linux). Rode de dentro da pasta baixada: bash instalar.sh
 set -euo pipefail
 pasta="$(cd "$(dirname "$0")" && pwd)"
-dados="${ESC_DATA:-$HOME/.escritorio-de-conteudo}"
+dados="${OFC_DATA:-$HOME/.oficina-de-conteudo}"
 skills="$HOME/.claude/skills"
 
 [ -f "$skills/maquina-de-edicao/SKILL.md" ] || { echo "Instale primeiro a Máquina de Edição com IA Básico."; exit 1; }
@@ -19,9 +19,9 @@ mkdir -p "$dados"
 versao="$(node -p 'require("./package.json").version')"
 printf '{ "pasta": %s, "versao": "%s" }\n' "$(node -p 'JSON.stringify(process.argv[1])' "$pasta")" "$versao" > "$dados/instalacao.json"
 
-if [ -d "$skills/escritorio" ]; then
-  backup="$HOME/.claude/skills-backup/$(date +%Y-%m-%d_%H-%M-%S)-$$"; mkdir -p "$backup"; mv "$skills/escritorio" "$backup/"
+if [ -d "$skills/oficina-de-conteudo" ]; then
+  backup="$HOME/.claude/skills-backup/$(date +%Y-%m-%d_%H-%M-%S)-$$"; mkdir -p "$backup"; mv "$skills/oficina-de-conteudo" "$backup/"
 fi
-mkdir -p "$skills"; cp -R "$pasta/skill/escritorio" "$skills/escritorio"
+mkdir -p "$skills"; cp -R "$pasta/skill/oficina-de-conteudo" "$skills/oficina-de-conteudo"
 
-echo "Pronto! Feche e abra o Claude Code e chame /escritorio (ou rode: npm start, nesta pasta)."
+echo "Pronto! Feche e abra o Claude Code e chame /oficina-de-conteudo (ou rode: npm start, nesta pasta)."

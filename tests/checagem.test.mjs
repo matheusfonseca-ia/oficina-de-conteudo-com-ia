@@ -34,7 +34,7 @@ test('Máquina without office mode → asks to update the Máquina', () => {
 test('Claude Code missing on Windows → asks for the official installer (claude.exe)', () => {
   const r = checarFerramentas({ ...ambiente({ faltando: ['claude'] }), windows: true });
   assert.equal(r.ok, false);
-  assert.equal(r.mensagem, 'O escritório precisa do Claude Code instalado pelo instalador oficial (claude.exe). Instale em https://claude.com/claude-code e faça login.');
+  assert.equal(r.mensagem, 'A Oficina precisa do Claude Code instalado pelo instalador oficial (claude.exe). Instale em https://claude.com/claude-code e faça login.');
 });
 
 test('Claude Code missing elsewhere → plain message with the site', () => {

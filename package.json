@@ -1,7 +1,7 @@
 {
-  "name": "escritorio-de-conteudo",
+  "name": "oficina-de-conteudo",
   "version": "0.1.0",
-  "description": "Escritório de Conteúdo — seis salas de agentes que levam o seu vídeo do bruto ao post, com a Máquina de Edição",
+  "description": "Oficina de Conteúdo — seis salas de agentes que levam o seu vídeo do bruto ao post, com a Máquina de Edição",
   "type": "module",
   "private": true,
   "scripts": {

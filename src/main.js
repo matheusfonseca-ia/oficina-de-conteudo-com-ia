@@ -7,7 +7,7 @@ import { initLeds } from './leds.js';
 import { makeIlhaRedonda, makeDomo } from './chefe.js';
 
 // The scene, camera, zoom and focus are the Oficina's (projetos/agents-office/src/main.js), trimmed to
-// six rooms with one desk each. The Escritório only runs in the Oficina's dark mode.
+// six rooms with one desk each. The Oficina de Conteúdo only runs in the Oficina's dark mode.
 const DEPTS = Object.fromEntries(Object.entries(CORES).map(([k, c]) => [k, { chip: c.chip, ink: c.ink, floor: c.piso, led: c.led }]));
 const PAINEL = () => (document.body.classList.contains('limpo') ? 0 : 400 + 30); // tasks.panelWidth() + 30 there
 
