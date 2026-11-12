@@ -6,7 +6,7 @@ export const ORDEM = ['pesquisa', 'roteiro', 'edicao', 'capa', 'postagem', 'anal
 export const LAYOUT = {
   cerebro:  { pos: [0, 0],     w: 24, d: 24, raio: 12 }, // round island under the dome (the Oficina's is a 16×16 square)
   pesquisa: { pos: [-32, -12], w: 20, d: 26 },
-  roteiro:  { pos: [6, -39],   w: 20, d: 30 },
+  roteiro:  { pos: [4, -34],   w: 20, d: 30 }, // the Oficina's delivery sits at (6,-39); moved in, closer to the dome
   edicao:   { pos: [38, -11],  w: 20, d: 30 },
   capa:     { pos: [41, 27],   w: 20, d: 26 },
   postagem: { pos: [6, 39],    w: 20, d: 30 },
