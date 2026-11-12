@@ -4,7 +4,7 @@
 // Rooms go clockwise on screen starting at the top.
 export const ORDEM = ['pesquisa', 'roteiro', 'edicao', 'capa', 'postagem', 'analise'];
 export const LAYOUT = {
-  cerebro:  { pos: [0, 0],     w: 16, d: 16 },
+  cerebro:  { pos: [0, 0],     w: 24, d: 24, raio: 12 }, // round island under the dome (the Oficina's is a 16×16 square)
   pesquisa: { pos: [-32, -12], w: 20, d: 26 },
   roteiro:  { pos: [6, -39],   w: 20, d: 30 },
   edicao:   { pos: [38, -11],  w: 20, d: 30 },

@@ -4,8 +4,7 @@ import { LAYOUT, ORDEM, CORES, ROBOS, LADO_PLACA } from './layout.js';
 import { criarTela } from './tela.js';
 import { decorar, mobiliar } from './decor.js';
 import { initLeds } from './leds.js';
-import { createGlobe, drawGlobe } from './neural-globe.js';
-import { BRAIN } from './braingraph.js';
+import { makeIlhaRedonda, makeAnelLed, makeDomo } from './chefe.js';
 
 // The scene, camera, zoom and focus are the Oficina's (projetos/agents-office/src/main.js), trimmed to
 // six rooms with one desk each. The Escritório only runs in the Oficina's dark mode.
@@ -127,7 +126,7 @@ const ilhas = {};
 for (const [k, L] of Object.entries(LAYOUT)) {
   const g = new THREE.Group();
   g.position.set(L.pos[0], 0, L.pos[1]);
-  const plinth = makePlinth(L.w, L.d, DEPTS[k].floor);
+  const plinth = L.raio ? makeIlhaRedonda(L.raio, DEPTS[k].floor) : makePlinth(L.w, L.d, DEPTS[k].floor);
   g.add(plinth);
   plinth.traverse(o => { if (o.isMesh) { o.userData.dept = k; o.userData.sala = k; clickTargets.push(o); } });
   plinth.children[0].userData.part = 'plinth'; plinth.children[1].userData.part = 'floor'; // dark mode re-tints these
@@ -135,35 +134,14 @@ for (const [k, L] of Object.entries(LAYOUT)) {
   ilhas[k] = { grupo: g, L };
 }
 
-/* ---------- the Brain: the Oficina's floating neural globe (brain.js 50–94), no vault behind it ---------- */
-const cerebro = (() => {
-  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const BW = 17.5, PX = 1024, PY = PX, GLOBE_RADIUS = PX * 0.405;
-  const CENTRE = new THREE.Vector3(0.6, 6.2, 0.6);
-  const nodes = BRAIN.nodes.map((n, i) => ({ ...n, i }));
-  const links = BRAIN.links.map(([a, b]) => [a, b]);
-  const globe = createGlobe(nodes);
-  let officeYaw = 0, nextPaint = 0;
-  const cv = document.createElement('canvas'); cv.width = PX; cv.height = PY;
-  const ctx = cv.getContext('2d');
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const board = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }));
-  board.scale.set(BW, BW, 1); board.position.copy(CENTRE); board.renderOrder = 4;
-  board.userData.dept = 'brainCore';
-  ilhas.cerebro.grupo.add(board);
-  function paintGlobe(now = performance.now()) {
-    ctx.clearRect(0, 0, PX, PY);
-    drawGlobe(ctx, { cx: PX / 2, cy: PY / 2, radius: GLOBE_RADIUS, yaw: officeYaw, tilt: -.15, time: now, globe, links, compact: true, backdrop: false });
-    tex.needsUpdate = true;
-  }
-  paintGlobe();
-  return {
-    tick(now) {
-      officeYaw = reduceMotion.matches ? 0 : now * .000025;
-      if (now >= nextPaint) { paintGlobe(now); nextPaint = now + (reduceMotion.matches ? 1000 : 80); }
-    },
-  };
-})();
+/* ---------- the centre: a round island under a neural-network dome (src/chefe.js) ---------- */
+const domo = makeDomo(LAYOUT.cerebro.raio - 0.4);
+domo.grupo.position.y = 0.12;
+domo.grupo.traverse(o => { if (o.isMesh || o.isLine || o.isPoints) o.userData.dept = 'domo'; }); // keeps its own fade, not the dim twins
+ilhas.cerebro.grupo.add(domo.grupo);
+const anelLed = makeAnelLed(LAYOUT.cerebro.raio);
+anelLed.grupo.visible = false; // dark mode shows it
+ilhas.cerebro.grupo.add(anelLed.grupo);
 
 /* ---------- one straight walkway per room to the Brain (Oficina main.js 183–198) ---------- */
 const portas = {}; // portas[k] = { porta: [x,z] at the room's edge, cerebro: [x,z] at the Brain's edge }
@@ -172,7 +150,7 @@ for (const k of ORDEM) {
   const B = LAYOUT.cerebro;
   const dx = L.pos[0] - B.pos[0], dz = L.pos[1] - B.pos[1];
   const edgeT = (w, d) => 1 / Math.max(Math.abs(dx) / (w / 2), Math.abs(dz) / (d / 2));
-  const podT = edgeT(L.w - 2, L.d - 2), brainT = edgeT(B.w - 2, B.d - 2);
+  const podT = edgeT(L.w - 2, L.d - 2), brainT = (B.raio - 1) / Math.hypot(dx, dz); // the centre island is round
   const from = [L.pos[0] - dx * podT, L.pos[1] - dz * podT];
   const to = [B.pos[0] + dx * brainT, B.pos[1] + dz * brainT];
   const walk = makeWalkway(from, to);
@@ -182,7 +160,7 @@ for (const k of ORDEM) {
 }
 // tag remaining brain furnishings (plinth) for the focus-dim pass
 ilhas.cerebro.grupo.traverse(o => { if ((o.isMesh || o.isSprite) && !o.userData.dept) o.userData.dept = 'cerebro'; });
-const leds = initLeds({ scene, LAYOUT, DEPTS });
+const leds = initLeds({ scene, LAYOUT: Object.fromEntries(ORDEM.map(k => [k, LAYOUT[k]])), DEPTS }); // the round centre has its own ring
 
 /* ---------- one desk + one robot per room (Oficina main.js 207–262, the lead's desk) ---------- */
 const ANG = Math.PI / 4;
@@ -238,6 +216,34 @@ for (const k of ORDEM) {
     centro: new THREE.Vector3(L.pos[0], 0, L.pos[1]), estado: 'ocioso', bob: Math.random() * 10 };
 }
 
+/* ---------- the boss: one desk in the middle of the dome, facing the camera ---------- */
+const ESCALA_CHEFE = 1.75; // a bigger desk: the boss's island is the widest
+const chefe = (() => {
+  const base = new THREE.Vector3(0, 0.12, 0);
+  const station = new THREE.Group();
+  station.position.copy(base);
+  station.rotation.y = ANG + Math.PI; // the monitor faces away: the boss looks at you over the desk
+  station.scale.setScalar(ESCALA_CHEFE);
+  const { group: desk } = makeDesk('#D1DECD');
+  station.add(desk);
+  const chair = makeChair(); chair.position.set(0, 0, 1.75); station.add(chair);
+  station.traverse(o => { if (o.isMesh) o.userData.dept = 'cerebro'; });
+  scene.add(station);
+  const robo = makeRobot({ shell: '#ECE8DE', head: 'box', chip: '#D1DECD', ink: '#4C7A57', lead: true });
+  robo.scale.setScalar(ESCALA_CHEFE);
+  const assento = base.clone().add(new THREE.Vector3(0, 0, 1.7 * ESCALA_CHEFE).applyAxisAngle(new THREE.Vector3(0, 1, 0), ANG + Math.PI));
+  robo.position.copy(assento);
+  robo.rotation.y = ANG; // faces the camera
+  robo.traverse(o => { if (o.isMesh) { o.userData.dept = 'cerebro'; o.userData.sala = 'cerebro'; clickTargets.push(o); } });
+  scene.add(robo);
+  const pill = document.createElement('div');
+  pill.className = 'pill';
+  pill.innerHTML = '<span class="star">★</span>CHEFE';
+  pill.addEventListener('click', () => enterFocus('cerebro'));
+  hud.appendChild(pill);
+  return { robo, pill, estado: 'ocioso', bob: Math.random() * 10 };
+})();
+
 /* ---------- room cards: the Oficina's compact department badges (main.js 343–378) ---------- */
 const placas = {};
 for (const k of ORDEM) {
@@ -276,7 +282,7 @@ function applySceneDim(deptKey) {
   scene.traverse(o => {
     if (!(o.isMesh || o.isLine || o.isSprite) || !o.material || o.material.isShadowMaterial || !o.userData.dept) return;
     if (!o.material.color || o.userData.dept === deptKey) return;
-    if (o.userData.dept === 'brainCore') return;
+    if (o.userData.dept === 'domo') return; // the dome fades on its own (domo.tick)
     dimSwapped.push({ mesh: o, orig: o.material });
     o.material = dimTwin(o.material);
   });
@@ -306,6 +312,7 @@ function setDark() {
     else if (o.userData.part === 'floor') m.color.set(DARK.floor);
   });
   leds.setDark(true);
+  anelLed.grupo.visible = true;
   hemi.color.set(0x8e95a3); hemi.groundColor.set(0x14151a); hemi.intensity = 0.75;
   key.color.set(0xe4e9f2); key.intensity = 1.5;
   ground.material.opacity = 0.35;
@@ -366,8 +373,7 @@ addEventListener('pointerup', (e) => {
   const hits = ray.intersectObjects(clickTargets, false);
   if (hits.length) {
     const k = hits[0].object.userData.sala;
-    if (k === 'cerebro') { zoomOut(); return; }
-    if (k && k !== focused) enterFocus(k);
+      if (k && k !== focused) enterFocus(k);
   }
 });
 // double-click empty space → straight back to overview
@@ -421,20 +427,20 @@ function focusTarget(k) {
 }
 function enterFocus(k) {
   if (focused === k) return;
-  if (focused && placas[focused]) placas[focused].el.classList.remove('foco');
+  placas[focused]?.el.classList.remove('foco');
   focused = k;
   focusDimTarget = 1;
   applySceneDim(k);
   vignette.classList.add('on');
   const t = focusTarget(k);
   flyTo(t.pos, t.zoom, 950, { arc: 0.10 });
-  placas[k].el.classList.add('foco');
+  placas[k]?.el.classList.add('foco');
   ouvintesClique.forEach(f => f(k));
   syncOverviewBtn();
 }
 function exitFocus(flyOut = true) {
   if (!focused) return;
-  placas[focused].el.classList.remove('foco');
+  placas[focused]?.el.classList.remove('foco');
   focused = null;
   focusDimTarget = 0;
   vignette.classList.remove('on');
@@ -508,6 +514,13 @@ function tickLOD() {
   }
   // name pills stay on at EVERY zoom — smaller when far, full-size when near
   const pillScale = 0.62 + 0.38 * smooth(1.2, 2.4, z);
+  { // the boss's pill, a little higher: he sits behind his desk
+    const p = chefe.robo.position;
+    const [sx, sy] = toScreen(v3.set(p.x, p.y + 4.6 * ESCALA_CHEFE, p.z).clone());
+    chefe.pill.style.display = limpo ? 'none' : 'block';
+    chefe.pill.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%) scale(${pillScale})`;
+    chefe.pill.style.opacity = focused && focused !== 'cerebro' ? 1 - 0.85 * focusDim : 1;
+  }
   for (const [k, s] of Object.entries(salas)) {
     const p = s.robo.position;
     const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * 1.12 * ESCALA, p.z).clone());
@@ -544,7 +557,10 @@ function loop(agora) {
   applyCamera();
   tickDim(dt);
   leds.tick(agora, camera, focused);
-  cerebro.tick(agora);
+  const centroApagado = !!focused && focused !== 'cerebro';
+  domo.tick(agora, dt, centroApagado);
+  anelLed.tick(dt, centroApagado);
+  poseWork(chefe.robo, 'read', agora + chefe.bob * 500, dt); // reading over the work; part 2 gives him real states
   for (const s of Object.values(salas)) posar(s, agora, dt);
   tickLOD();
   for (const f of ticks) f(agora, dt);

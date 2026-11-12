@@ -10,13 +10,13 @@ App local em Node (sem framework de servidor) + cena 3D (three, bundle único em
 - **Fechamento:** `app.fechar()` chama `orquestrador.pararTudo()`, que aborta cada trabalho (um `AbortController` por ficha, repassado aos runners) e espera o Claude filho morrer. Trabalho abortado assim não marca erro: a ficha fica na etapa de trabalho e o `retomar()` da próxima abertura continua.
 - **Claude filho:** os runners rodam com `--settings '{"disableAllHooks":true}'` e sem `CLAUDECODE` no ambiente (`ambienteFilho()` em `lib/runner-edicao.mjs`). No Windows só o `claude.exe` do instalador oficial funciona (o servidor chama sem shell); a checagem e o `instalar.ps1` conferem isso.
 - **Pacote de vídeo:** `src/movimentos.js` guarda a função pura que decide os movimentos do pacote; `src/pacote.js` a usa. Não há anel: o pacote sai pela passarela da sala, passa pelo Cérebro e entra pela passarela da próxima.
-- **Cena = Oficina, só no modo escuro.** Câmera, visão geral, zoom (roda, botões, teclas), arrastar, foco numa sala (voo com arco, as outras escurecem, vinheta), cartões das salas e nomes dos robôs vêm do `src/main.js` da Oficina, com as mesmas funções e números. O escritório não tem modo claro: `setDark()` roda na abertura e o `shell.html` só tem os tokens escuros.
+- **Cena = Oficina, só no modo escuro.** Câmera, visão geral, zoom (roda, botões, teclas), arrastar, foco numa sala (voo com arco, as outras escurecem, vinheta), cartões das salas e nomes dos robôs vêm do `src/main.js` da Oficina, com as mesmas funções e números. O centro é próprio (`src/chefe.js`): ilha redonda, domo de rede neural e a mesa do chefe virada pra câmera. O escritório não tem modo claro: `setDark()` roda na abertura e o `shell.html` só tem os tokens escuros.
 
 ## Regras
 - Todo texto que o aluno vê é pt-BR, simples, sem jargão.
 - Só a sala de EDIÇÃO tem terminal (Bash). As outras salas rodam o Claude sem ferramentas de terminal.
 - Nenhum teste chama o Claude de verdade: use runners falsos (`runners`, `ESC_CLAUDE_COMMAND`, `ESC_CLAUDE_PREFIX_ARGS`).
-- `src/builders.js`, `src/leds.js`, `src/neural-globe.js`, `src/braingraph.js`, `lib/claude-runner.mjs` e `lib/execution.mjs` são **cópias literais** de `projetos/agents-office` (Oficina de Agentes). Correção feita lá precisa ser copiada aqui à mão, e vice-versa. Não editar só aqui.
+- `src/builders.js`, `src/leds.js`, `lib/claude-runner.mjs` e `lib/execution.mjs` são **cópias literais** de `projetos/agents-office` (Oficina de Agentes). Correção feita lá precisa ser copiada aqui à mão, e vice-versa. Não editar só aqui.
 - Dados do aluno ficam fora do repo (`ESC_DATA`, padrão `~/.escritorio-de-conteudo`). Nunca gravar dados dentro da pasta do repo.
 - Não adicionar opções só para teste nos instaladores (`instalar.sh`, `instalar.ps1`). Eles escrevem `instalacao.json` (`pasta`, `versao`) que a skill `/escritorio` lê.
 
