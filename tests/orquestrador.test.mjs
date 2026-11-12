@@ -77,6 +77,26 @@ test('andamento exposes the live estado.json of the running edição', async () 
   liberar(); await o.esperarOcioso(); assert.equal(o.andamento('a'), null);
 });
 
+test('andamento ignores the estado.json left by the previous run until this run writes a new one', async () => {
+  let liberar; const segura = new Promise(r => { liberar = r; });
+  let escrever;
+  const { o, nova } = montar({ edicao: async ({ pastaVideo }) => {
+    await new Promise(r => { escrever = r; });
+    fs.writeFileSync(path.join(pastaVideo, 'edit', 'estado.json'), JSON.stringify({ etapa: 'montando', progresso: 0.2, mensagem: 'Cortando' }));
+    await segura; return { estado: { etapa: 'revisao', studioUrl: 'http://s' }, sessao: 'S' };
+  } });
+  nova('a', 'editando');
+  const arq = path.join(o.store.pasta('a'), 'edit', 'estado.json');
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  fs.writeFileSync(arq, JSON.stringify({ etapa: 'aguardando-escolhas', progresso: 1, mensagem: 'Pronto pra você escolher formato e estilo' }));
+  const antes = new Date(Date.now() - 60000); fs.utimesSync(arq, antes, antes);
+  o.acordar(); await new Promise(r => setTimeout(r, 20));
+  assert.equal(o.andamento('a'), null);
+  escrever(); await new Promise(r => setTimeout(r, 20));
+  assert.deepEqual(o.andamento('a'), { progresso: 0.2, mensagem: 'Cortando' });
+  liberar(); await o.esperarOcioso();
+});
+
 test('a store.salvar that throws inside the failure path is not an unhandled rejection; the office keeps working', async () => {
   const soltas = []; const pegar = e => soltas.push(e); process.on('unhandledRejection', pegar);
   const erroOriginal = console.error; console.error = () => {};
