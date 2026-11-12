@@ -18,31 +18,6 @@ export function makeIlhaRedonda(R, floorColor) {
   return g;
 }
 
-// The LED strip round the island's lip, the whole colour wheel (dark mode, like leds.js does for the Brain).
-export function makeAnelLed(R) {
-  const g = new THREE.Group();
-  const faixa = (r0, r1, opacidade, aditivo) => {
-    const geo = new THREE.RingGeometry(r0, r1, 192, 1);
-    geo.rotateX(-Math.PI / 2);
-    const p = geo.getAttribute('position'), cores = [];
-    for (let i = 0; i < p.count; i++) { const c = hsl(matiz(p.getX(i), p.getZ(i))); cores.push(c.r, c.g, c.b); }
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(cores, 3));
-    return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: opacidade, depthWrite: false,
-      blending: aditivo ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false }));
-  };
-  const fio = faixa(R - 0.3, R - 0.06, 1, false); fio.position.y = 0.135;
-  const brilho = faixa(R - 1.6, R - 0.06, 0.28, true); brilho.position.y = 0.13;
-  g.add(brilho, fio);
-  return {
-    grupo: g,
-    nivel: 1,
-    tick(dt, apagado) { // fades like the other islands' strips when a room has the focus
-      this.nivel += ((apagado ? 0.14 : 1) - this.nivel) * (1 - Math.exp(-dt * 5));
-      fio.material.opacity = this.nivel; brilho.material.opacity = 0.28 * this.nivel;
-    },
-  };
-}
-
 // A geodesic half-sphere of lines and nodes over the whole island.
 export function makeDomo(R) {
   const g = new THREE.Group();
@@ -57,7 +32,7 @@ export function makeDomo(R) {
     idx.push(j);
   }
   const arestas = new Set(), lin = [], linCor = [];
-  const cor = v => hsl(matiz(v.x, v.z), 0.5); // full saturation, pure hue (no wash towards white)
+  const cor = v => hsl(matiz(v.x, v.z), 0.52 + 0.08 * (v.y / R)); // a touch deeper than the globe's 0.55–0.65
   for (let i = 0; i < idx.length; i += 3) for (let a = 0; a < 3; a++) {
     const p = idx[i + a], q = idx[i + (a + 1) % 3];
     const k = p < q ? `${p}:${q}` : `${q}:${p}`;
@@ -76,14 +51,14 @@ export function makeDomo(R) {
   const lg = new THREE.BufferGeometry();
   lg.setAttribute('position', new THREE.Float32BufferAttribute(lin, 3));
   lg.setAttribute('color', new THREE.Float32BufferAttribute(linCor, 3));
-  const linhas = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+  const linhas = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }));
   const topo = pontos.filter(v => v.y >= -0.01);
   const pg = new THREE.BufferGeometry().setFromPoints(topo);
   pg.setAttribute('color', new THREE.Float32BufferAttribute(topo.flatMap(v => { const c = cor(v); return [c.r, c.g, c.b]; }), 3));
-  const nos = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.5, vertexColors: true, transparent: true, opacity: 1, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+  const nos = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.34, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
   // a faint glass shell so the dome reads as a volume, not just a wire cage
   const vidro = new THREE.Mesh(new THREE.SphereGeometry(R * 0.995, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: '#7A5CFF', transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: '#8EA2FF', transparent: true, opacity: 0.045, depthWrite: false, side: THREE.DoubleSide }));
   const rede = new THREE.Group(); rede.add(linhas, nos);
   g.add(vidro, rede);
   g.renderOrder = 3; linhas.renderOrder = 3; nos.renderOrder = 4;
@@ -94,10 +69,10 @@ export function makeDomo(R) {
     tick(agora, dt, apagado) {
       if (!reduzir.matches) rede.rotation.y = agora * 0.00004;
       this.nivel += ((apagado ? 0.25 : 1) - this.nivel) * (1 - Math.exp(-dt * 5));
-      const pulso = reduzir.matches ? 1 : 0.88 + 0.12 * Math.sin(agora / 900);
-      linhas.material.opacity = 0.95 * this.nivel * pulso;
-      nos.material.opacity = this.nivel;
-      vidro.material.opacity = 0.08 * this.nivel;
+      const pulso = reduzir.matches ? 1 : 0.85 + 0.15 * Math.sin(agora / 900);
+      linhas.material.opacity = 0.5 * this.nivel * pulso;
+      nos.material.opacity = 0.95 * this.nivel;
+      vidro.material.opacity = 0.045 * this.nivel;
     },
   };
 }

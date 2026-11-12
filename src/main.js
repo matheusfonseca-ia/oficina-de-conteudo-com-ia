@@ -4,7 +4,7 @@ import { LAYOUT, ORDEM, CORES, ROBOS, LADO_PLACA } from './layout.js';
 import { criarTela } from './tela.js';
 import { decorar, mobiliar } from './decor.js';
 import { initLeds } from './leds.js';
-import { makeIlhaRedonda, makeAnelLed, makeDomo } from './chefe.js';
+import { makeIlhaRedonda, makeDomo } from './chefe.js';
 
 // The scene, camera, zoom and focus are the Oficina's (projetos/agents-office/src/main.js), trimmed to
 // six rooms with one desk each. The Escritório only runs in the Oficina's dark mode.
@@ -139,9 +139,6 @@ const domo = makeDomo(LAYOUT.cerebro.raio - 0.4);
 domo.grupo.position.y = 0.12;
 domo.grupo.traverse(o => { if (o.isMesh || o.isLine || o.isPoints) o.userData.dept = 'domo'; }); // keeps its own fade, not the dim twins
 ilhas.cerebro.grupo.add(domo.grupo);
-const anelLed = makeAnelLed(LAYOUT.cerebro.raio);
-anelLed.grupo.visible = false; // dark mode shows it
-ilhas.cerebro.grupo.add(anelLed.grupo);
 
 /* ---------- one straight walkway per room to the Brain (Oficina main.js 183–198) ---------- */
 const portas = {}; // portas[k] = { porta: [x,z] at the room's edge, cerebro: [x,z] at the Brain's edge }
@@ -312,7 +309,6 @@ function setDark() {
     else if (o.userData.part === 'floor') m.color.set(DARK.floor);
   });
   leds.setDark(true);
-  anelLed.grupo.visible = true;
   hemi.color.set(0x8e95a3); hemi.groundColor.set(0x14151a); hemi.intensity = 0.75;
   key.color.set(0xe4e9f2); key.intensity = 1.5;
   ground.material.opacity = 0.35;
@@ -559,7 +555,6 @@ function loop(agora) {
   leds.tick(agora, camera, focused);
   const centroApagado = !!focused && focused !== 'cerebro';
   domo.tick(agora, dt, centroApagado);
-  anelLed.tick(dt, centroApagado);
   poseWork(chefe.robo, 'read', agora + chefe.bob * 500, dt); // reading over the work; part 2 gives him real states
   for (const s of Object.values(salas)) posar(s, agora, dt);
   tickLOD();
