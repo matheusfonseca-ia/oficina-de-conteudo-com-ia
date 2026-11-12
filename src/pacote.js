@@ -1,20 +1,19 @@
 import * as THREE from 'three';
 import { rbox } from './builders.js';
-// A small clapperboard-like package that walks the ring from one room to the next.
-// Rooms not adjacent on the ring: it hops ring segment by segment, clockwise.
+// A small clapperboard-like package that walks from one room to the next along the walkways:
+// out of the room, across to the Brain, and in through the next room's walkway (the Oficina has no ring).
 export function criarPacotes(ESC) {
   const vivos = [], filas = {};
   const novo = () => { const g = new THREE.Group(); const c = rbox(1.4, 1, 0.9, '#151414', 0.12); g.add(c); const t = rbox(1.4, 0.2, 0.25, '#F7F7F2', 0.06); t.position.y = 0.95; g.add(t); ESC.cena.add(g); return g; };
   function rota(de, para) {
-    const pontos = []; let i = ESC.anel.findIndex(s => s.de === de);
-    if (i < 0) return pontos;
-    for (let n = 0; n < 6; n++) { const s = ESC.anel[(i + n) % 6]; pontos.push(s.a, s.b); if (s.para === para) break; }
-    return pontos.map(([x, z]) => new THREE.Vector3(x, 0.4, z));
+    const a = ESC.portas[de], b = ESC.portas[para];
+    if (!a || !b) return [];
+    return [a.porta, a.cerebro, b.cerebro, b.porta].map(([x, z]) => new THREE.Vector3(x, 0.4, z));
   }
   return {
     aoMudar(id, de, para) {
       const pts = rota(de, para); if (pts.length < 2) return;
-      vivos.push({ g: novo(), pts, t: 0, dur: 1.4 * pts.length / 2 });
+      vivos.push({ g: novo(), pts, t: 0, dur: 3.2 });
     },
     fila(sala, n) { // packages waiting at the room's door
       filas[sala] = filas[sala] || [];

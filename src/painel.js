@@ -3,8 +3,7 @@ import { salaDaEtapa } from '../lib/ficha.mjs';
 import { criarPacotes } from './pacote.js';
 import { calcularMovimentos } from './movimentos.js';
 import { ETAPAS } from '../lib/ficha.mjs';
-import { ORDEM, LAYOUT } from './layout.js';
-import * as THREE from 'three';
+import { ORDEM } from './layout.js';
 
 const ultimaSala = new Map();
 export function aplicarEstado(ESC, estado, pacotes) {
@@ -132,30 +131,20 @@ let modalId = null;
 function abrirModal(url, id) { modalId = id; $('#modal iframe').src = url; $('#modal-aba').href = url; $('#modal').classList.add('aberto'); }
 function fecharModal() { modalId = null; $('#modal').classList.remove('aberto'); $('#modal iframe').src = 'about:blank'; }
 
+// Room cards: the Oficina's compact department badge (main.js places them, the same way as there).
 function criarPlacas(ESC) {
-  const placas = {};
-  for (const k of ORDEM) {
-    const el = document.createElement('div'); el.className = 'placa-sala'; el.dataset.sala = k; document.body.appendChild(el); placas[k] = el;
+  for (const el of Object.values(ESC.placas))
     el.addEventListener('click', ev => { if (ev.target.dataset.acao === 'checar') api.post('/api/checagem').catch(e => alert(e.message)); });
-  }
-  const ponto = (x, z) => ESC.toScreen(new THREE.Vector3(x, 0, z));
-  ESC.aoTick(() => {
-    const [cx, cy] = ponto(LAYOUT.cerebro.pos[0], LAYOUT.cerebro.pos[1]);
-    for (const k of ORDEM) {
-      const L = LAYOUT[k], [ix, iy] = ponto(L.pos[0], L.pos[1]);
-      let dx = ix - cx, dy = iy - cy; const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
-      let meio = 0;
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const [px, py] = ponto(L.pos[0] + sx * L.w / 2, L.pos[1] + sz * L.d / 2); meio = Math.max(meio, Math.hypot(px - ix, py - iy)); }
-      const d = meio + 6;
-      placas[k].style.left = (ix + dx * d) + 'px'; placas[k].style.top = (iy + dy * d) + 'px';
-      placas[k].style.transform = `translate(${-50 + 50 * dx}%, ${-50 + 50 * dy}%)`;
-    }
-  });
   return e => {
     for (const s of e.salas) {
-      const el = placas[s.chave]; el.dataset.estado = s.estado;
-      el.innerHTML = `<b>${esc(s.nome)}</b><div class="linha">${esc(s.texto)}</div>`
-        + (s.ativa ? `<div class="num"><span>fila: ${s.fila}</span><span>${esc(s.rotuloContador)}: ${s.contador}</span></div>` : '')
+      const el = ESC.placas[s.chave]; if (!el) continue;
+      el.dataset.estado = s.estado;
+      const esperando = s.estado === 'esperando' || s.estado === 'problema';
+      el.innerHTML = `<div class="b-heading"><div class="b-name"><span class="dot" style="background:${esc(el.style.getPropertyValue('--sw'))}"></span><span class="b-title">${esc(s.nome)}</span></div>`
+        + (esperando ? `<span class="b-appr" title="${s.estado === 'problema' ? 'Precisa de você' : 'Esperando você'}">⚠</span>` : '') + '</div>'
+        + (s.ativa ? `<div class="b-count"><span class="b-num">${s.fila}</span><span class="b-lab">${s.fila === 1 ? 'vídeo na sala' : 'vídeos na sala'}</span></div>` : '')
+        + `<div class="b-metrics"><div class="m-row"><span class="m-lab b-status">${esc(s.texto)}</span></div>`
+        + (s.ativa ? `<div class="m-row"><span class="m-lab">${esc(s.rotuloContador)}</span><span class="m-val">${s.contador}</span></div>` : '') + '</div>'
         + (s.chave === 'edicao' && !e.checagem.ok ? '<button data-acao="checar">Conferir de novo</button>' : '');
     }
   };
