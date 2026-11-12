@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { makePlinth, makeDesk, makeChair, makeRobot, poseWork, makeWalkway, makeWarnSprite, PLINTH_H } from './builders.js';
+import { makePlinth, makeDesk, makeChair, makeRobot, poseWork, makeWalkway, makeWarnSprite, makePlant, makeServerRack, PLINTH_H } from './builders.js';
 import { LAYOUT, ORDEM, CORES, ROBOS, LADO_PLACA } from './layout.js';
 import { criarTela } from './tela.js';
-import { decorar } from './decor.js';
+import { decorar, mobiliar } from './decor.js';
 import { initLeds } from './leds.js';
 import { createGlobe, drawGlobe } from './neural-globe.js';
 import { BRAIN } from './braingraph.js';
@@ -187,14 +187,18 @@ const leds = initLeds({ scene, LAYOUT, DEPTS });
 /* ---------- one desk + one robot per room (Oficina main.js 207–262, the lead's desk) ---------- */
 const ANG = Math.PI / 4;
 const rot = v => v.applyAxisAngle(new THREE.Vector3(0, 1, 0), ANG);
+// One desk per room on an Oficina-sized island: the whole set (desk, chair, robot, decor) is scaled up
+// from the island centre so the room fills its island.
+const ESCALA = 1.45;
 const salas = {};
 for (const k of ORDEM) {
   const L = LAYOUT[k], cor = CORES[k];
-  const base = new THREE.Vector3(L.pos[0], 0.12, L.pos[1] - 1);
+  const base = new THREE.Vector3(L.pos[0], 0.12, L.pos[1] - ESCALA);
   // whole station rotated 45° so monitor screens face the camera square-on
   const station = new THREE.Group();
   station.position.copy(base);
   station.rotation.y = ANG;
+  station.scale.setScalar(ESCALA);
   const tela = criarTela(cor.chip);
   const { group: desk } = makeDesk(cor.chip, { tex: tela.tex, canvas: tela.canvas });
   station.add(desk);
@@ -205,14 +209,15 @@ for (const k of ORDEM) {
   scene.add(station);
 
   const robo = makeRobot({ shell: ROBOS[k].shell, head: ROBOS[k].head, chip: cor.chip, ink: cor.ink, lead: true });
-  const assento = base.clone().add(rot(new THREE.Vector3(0, 0, 1.7)));
+  robo.scale.setScalar(ESCALA);
+  const assento = base.clone().add(rot(new THREE.Vector3(0, 0, 1.7 * ESCALA)));
   robo.position.copy(assento);
   robo.rotation.y = ANG + Math.PI; // face the monitor
   robo.traverse(o => { if (o.isMesh) { o.userData.dept = k; o.userData.sala = k; clickTargets.push(o); } });
   scene.add(robo);
 
   const aviso = makeWarnSprite();
-  aviso.visible = false; aviso.position.copy(assento).add(new THREE.Vector3(0, 6.2, 0));
+  aviso.visible = false; aviso.position.copy(assento).add(new THREE.Vector3(0, 6.2 * ESCALA, 0));
   scene.add(aviso);
 
   // name pill (HTML) — clickable, same as clicking the room
@@ -223,11 +228,13 @@ for (const k of ORDEM) {
   hud.appendChild(pill);
 
   const decor = decorar(k, cor.chip);
+  decor.scale.setScalar(ESCALA);
+  decor.add(mobiliar(k, cor.chip, { makePlant, makeServerRack }));
   decor.traverse(o => { if (o.isMesh) o.userData.dept = k; });
   ilhas[k].grupo.add(decor);
 
   salas[k] = { grupo: ilhas[k].grupo, robo, tela, aviso, estacao: station, assento, pill, decor,
-    pe: assento.clone().add(rot(new THREE.Vector3(1.5, 0, 0.15))),
+    pe: assento.clone().add(rot(new THREE.Vector3(1.5 * ESCALA, 0, 0.15 * ESCALA))),
     centro: new THREE.Vector3(L.pos[0], 0, L.pos[1]), estado: 'ocioso', bob: Math.random() * 10 };
 }
 
@@ -452,7 +459,7 @@ function posar(s, agora, dt) {
   let d = alvo - s.robo.rotation.y; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
   s.robo.rotation.y += d * (1 - Math.exp(-dt * 6));
   s.aviso.visible = s.estado === 'problema';
-  if (s.aviso.visible) s.aviso.position.y = 6.2 + Math.sin(agora / 300) * 0.25;
+  if (s.aviso.visible) s.aviso.position.y = 6.2 * ESCALA + Math.sin(agora / 300) * 0.25;
 }
 
 /* ---------- cards + pills follow the islands (Oficina main.js 1337–1391, tickLOD) ---------- */
@@ -503,7 +510,7 @@ function tickLOD() {
   const pillScale = 0.62 + 0.38 * smooth(1.2, 2.4, z);
   for (const [k, s] of Object.entries(salas)) {
     const p = s.robo.position;
-    const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * 1.12, p.z).clone());
+    const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * 1.12 * ESCALA, p.z).clone());
     s.pill.style.display = limpo ? 'none' : 'block';
     s.pill.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%) scale(${pillScale})`;
     s.pill.style.opacity = focused && focused !== k ? 1 - 0.85 * focusDim : 1;
