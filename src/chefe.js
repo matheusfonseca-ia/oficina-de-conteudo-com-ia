@@ -32,7 +32,7 @@ export function makeDomo(R) {
     idx.push(j);
   }
   const arestas = new Set(), lin = [], linCor = [];
-  const cor = v => hsl(matiz(v.x, v.z), 0.52 + 0.08 * (v.y / R)); // a touch deeper than the globe's 0.55–0.65
+  const cor = v => hsl(matiz(v.x, v.z), 0.62 + 0.08 * (v.y / R)); // bright, still fully saturated
   for (let i = 0; i < idx.length; i += 3) for (let a = 0; a < 3; a++) {
     const p = idx[i + a], q = idx[i + (a + 1) % 3];
     const k = p < q ? `${p}:${q}` : `${q}:${p}`;
@@ -51,7 +51,7 @@ export function makeDomo(R) {
   const lg = new THREE.BufferGeometry();
   lg.setAttribute('position', new THREE.Float32BufferAttribute(lin, 3));
   lg.setAttribute('color', new THREE.Float32BufferAttribute(linCor, 3));
-  const linhas = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }));
+  const linhas = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.65, depthWrite: false, toneMapped: false }));
   const topo = pontos.filter(v => v.y >= -0.01);
   const pg = new THREE.BufferGeometry().setFromPoints(topo);
   pg.setAttribute('color', new THREE.Float32BufferAttribute(topo.flatMap(v => { const c = cor(v); return [c.r, c.g, c.b]; }), 3));
@@ -70,7 +70,7 @@ export function makeDomo(R) {
       if (!reduzir.matches) rede.rotation.y = agora * 0.00004;
       this.nivel += ((apagado ? 0.25 : 1) - this.nivel) * (1 - Math.exp(-dt * 5));
       const pulso = reduzir.matches ? 1 : 0.85 + 0.15 * Math.sin(agora / 900);
-      linhas.material.opacity = 0.5 * this.nivel * pulso;
+      linhas.material.opacity = 0.65 * this.nivel * pulso;
       nos.material.opacity = 0.95 * this.nivel;
       vidro.material.opacity = 0.045 * this.nivel;
     },
