@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// O motor de edição vem dentro da Oficina (pasta motor/) e é instalado como skill com este nome.
+export const MOTOR = 'oficina-de-conteudo-motor';
 
 function readJSON(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } }
 

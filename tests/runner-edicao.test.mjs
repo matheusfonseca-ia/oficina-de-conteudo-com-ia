@@ -11,7 +11,7 @@ const pasta = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-ed-')
 
 test('argsEdicao: first run creates the session, later runs resume it; terminal on, MCP off', () => {
   const a = argsEdicao({ comando: 'PREPARAR', sessao: 'u-1', retomar: false, skillsDir: '/s', maquinaDir: '/m' });
-  assert.equal(a[0], '-p'); assert.equal(a[1], '/maquina-de-edicao PREPARAR');
+  assert.equal(a[0], '-p'); assert.equal(a[1], '/oficina-de-conteudo-motor PREPARAR');
   assert.ok(a.includes('--session-id') && a[a.indexOf('--session-id') + 1] === 'u-1');
   assert.ok(!a.includes('--resume'));
   assert.equal(a[a.indexOf('--permission-mode') + 1], 'dontAsk');

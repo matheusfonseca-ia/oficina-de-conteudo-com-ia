@@ -8,7 +8,8 @@ import { checarFerramentas } from '../lib/checagem.mjs';
 function ambiente({ faltando = [] } = {}) {
   const skillsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-sk-'));
   const maquinaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-mq-'));
-  if (!faltando.includes('maquina')) { fs.mkdirSync(path.join(skillsDir, 'maquina-de-edicao', 'referencias'), { recursive: true }); fs.writeFileSync(path.join(skillsDir, 'maquina-de-edicao', 'referencias', 'modo-escritorio.md'), '#'); }
+  if (!faltando.includes('maquina')) { fs.mkdirSync(path.join(skillsDir, 'maquina-de-edicao'), { recursive: true }); fs.writeFileSync(path.join(skillsDir, 'maquina-de-edicao', 'SKILL.md'), '#'); }
+  if (!faltando.includes('motor')) { fs.mkdirSync(path.join(skillsDir, 'oficina-de-conteudo-motor', 'referencias'), { recursive: true }); fs.writeFileSync(path.join(skillsDir, 'oficina-de-conteudo-motor', 'referencias', 'modo-escritorio.md'), '#'); }
   if (!faltando.includes('earshot')) fs.mkdirSync(path.join(maquinaDir, 'earshot'));
   const exec = (cmd) => ({ ok: !faltando.includes(cmd), naoAchou: faltando.includes(cmd) });
   return { skillsDir, maquinaDir, exec };
@@ -17,7 +18,7 @@ function ambiente({ faltando = [] } = {}) {
 test('everything installed → ok', () => {
   const r = checarFerramentas(ambiente());
   assert.equal(r.ok, true); assert.equal(r.mensagem, null);
-  assert.deepEqual(r.itens.map(i => i.nome), ['Node', 'Claude Code', 'FFmpeg', 'ffprobe', 'Python', 'HyperFrames', 'earshot', 'Máquina de Edição (modo escritório)']);
+  assert.deepEqual(r.itens.map(i => i.nome), ['Node', 'Claude Code', 'FFmpeg', 'ffprobe', 'Python', 'HyperFrames', 'earshot', 'Máquina de Edição Básico', 'Motor da Oficina']);
 });
 
 test('missing ffmpeg → plain message with how to install', () => {
@@ -26,9 +27,14 @@ test('missing ffmpeg → plain message with how to install', () => {
   assert.match(r.itens.find(i => i.nome === 'FFmpeg').comoInstalar, /winget install|brew install/);
 });
 
-test('Máquina without office mode → asks to update the Máquina', () => {
+test('Máquina Básico missing → asks to install it', () => {
   const r = checarFerramentas(ambiente({ faltando: ['maquina'] }));
-  assert.match(r.mensagem, /Atualize a Máquina de Edição/);
+  assert.match(r.mensagem, /Instale a Máquina de Edição com IA Básico/);
+});
+
+test('Oficina engine missing → asks to run the Oficina installer again', () => {
+  const r = checarFerramentas(ambiente({ faltando: ['motor'] }));
+  assert.match(r.mensagem, /instalador da Oficina/);
 });
 
 test('Claude Code missing on Windows → asks for the official installer (claude.exe)', () => {

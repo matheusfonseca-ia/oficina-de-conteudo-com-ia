@@ -1,5 +1,5 @@
 // Test fixture: stands in for `claude`. Never touches the network.
-// Edição: reads the /maquina-de-edicao command and writes edit/estado.json in cwd.
+// Edição: reads the /oficina-de-conteudo-motor command and writes edit/estado.json in cwd.
 // Postagem: answers with OFC_TEST_POSTAGEM (raw text) or a valid JSON.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +13,7 @@ const modo = process.env.OFC_TEST_MODO || 'ok';
 if (modo === 'sem-resultado') process.exit(0);
 // lento: grava o próprio PID em OFC_TEST_PID e fica rodando (pra testar o fechamento da Oficina).
 if (modo === 'lento') { if (process.env.OFC_TEST_PID) fs.writeFileSync(process.env.OFC_TEST_PID, String(process.pid)); setTimeout(() => {}, 120000); }
-const cmd = modo === 'lento' ? null : prompt.match(/^\/maquina-de-edicao (\S+)/)?.[1];
+const cmd = modo === 'lento' ? null : prompt.match(/^\/oficina-de-conteudo-motor (\S+)/)?.[1];
 if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   const edit = path.join(process.cwd(), 'edit'); fs.mkdirSync(edit, { recursive: true });
   const etapa = { PREPARAR: 'aguardando-escolhas', ESCOLHAS_PRONTAS: 'revisao', 'REVISAR:': 'revisao', EXPORTAR: 'exportado', REABRIR_STUDIO: 'revisao' }[cmd];

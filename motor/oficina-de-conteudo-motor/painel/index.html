@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Máquina de Edição</title>
+  <link rel="icon" href="icone.png">
+  <link rel="stylesheet" href="fontes/fonts.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Fontes usadas dentro da prévia (as mesmas que a edição baixa pro projeto). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Caveat:wght@700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@700;800&family=Lilita+One&family=Newsreader:wght@400;600&family=Oswald:wght@300;500&family=Permanent+Marker&family=Playfair+Display:wght@700&family=Poppins:wght@400;700&family=Silkscreen:wght@400;700&family=Space+Mono:wght@400;700&display=swap">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <img src="icone.png" alt="" width="34" height="34">
+      <span>Máquina de Edição</span>
+    </div>
+    <div class="arquivo" id="arquivo" hidden></div>
+  </header>
+
+  <main class="mesa">
+    <div class="escolhas" id="escolhas" aria-live="polite"></div>
+
+    <aside class="monitor" aria-label="Prévia da edição">
+      <div class="monitor-cabeca">
+        <span class="monitor-titulo" id="monitor-titulo">Prévia</span>
+        <span class="monitor-nota" id="monitor-nota"></span>
+      </div>
+      <div class="tela-moldura" id="moldura">
+        <div class="tela" id="tela"></div>
+      </div>
+      <div class="linha-tempo" id="linha-tempo">
+        <div class="trilhas" id="trilhas"></div>
+        <div class="agulha" id="agulha"></div>
+      </div>
+      <div class="controles">
+        <button class="ctrl" id="tocar" type="button" aria-label="Pausar a prévia">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path id="icone-tocar" d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/></svg>
+        </button>
+        <span class="tempo" id="tempo">00:00 / 00:00</span>
+        <button class="ctrl ctrl-som" id="som" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path id="ondas" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".35"/></svg>
+          <span id="som-rotulo">Ouvir música e efeitos</span>
+        </button>
+      </div>
+      <button class="comecar" id="comecar" type="button" disabled>
+        <span id="comecar-rotulo">Começar a edição</span>
+      </button>
+      <p class="falta" id="falta"></p>
+    </aside>
+  </main>
+
+  <div class="fim" id="fim" hidden>
+    <div class="fim-caixa">
+      <img src="icone.png" alt="" width="64" height="64">
+      <h2>Escolhas enviadas</h2>
+      <p>Pode voltar pro Claude Code. A edição já começou e ele te avisa quando o vídeo estiver pronto pra assistir.</p>
+      <p class="fim-pequeno">Pode fechar esta aba.</p>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

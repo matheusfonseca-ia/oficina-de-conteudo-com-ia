@@ -15,7 +15,7 @@ Nesta versão você grava o vídeo, joga na Oficina, escolhe o formato e o estil
 
 ## O que você precisa antes
 
-- **Máquina de Edição com IA Básico**, instalada e **atualizada, versão com modo escritório**. Essa versão ainda não foi publicada pra todo mundo: enquanto isso não acontecer, o instalador vai parar avisando pra atualizar a Máquina.
+- **Máquina de Edição com IA Básico** instalada. Os formatos, os efeitos sonoros e os efeitos de vídeo vêm dela; com o Completo instalado, os formatos dele também aparecem. A Oficina traz o próprio motor de edição, então não é preciso mexer na Máquina.
 - **Node.js 22.13 ou mais novo**
 - **Claude Code** instalado e com login feito
 
@@ -26,7 +26,7 @@ Baixe esta pasta, abra o terminal dentro dela e rode:
 - Windows: `powershell -ExecutionPolicy Bypass -File .\instalar.ps1`
 - Mac ou Linux: `bash instalar.sh`
 
-O instalador confere tudo, prepara a Oficina e instala o comando `/oficina-de-conteudo` no seu Claude Code. Quando aparecer "Pronto!", feche e abra o Claude Code.
+O instalador confere tudo, prepara a Oficina e instala no seu Claude Code o comando `/oficina-de-conteudo` e o motor de edição da Oficina. Quando aparecer "Pronto!", feche e abra o Claude Code.
 
 ## Primeiro uso
 

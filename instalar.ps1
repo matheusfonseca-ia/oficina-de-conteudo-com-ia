@@ -6,7 +6,6 @@ $dados = if ($env:OFC_DATA) { $env:OFC_DATA } else { Join-Path $HOME '.oficina-d
 $skills = Join-Path $HOME '.claude\skills'
 
 if (-not (Test-Path (Join-Path $skills 'maquina-de-edicao\SKILL.md'))) { Write-Host 'Instale primeiro a Máquina de Edição com IA Básico.'; exit 1 }
-if (-not (Test-Path (Join-Path $skills 'maquina-de-edicao\referencias\modo-escritorio.md'))) { Write-Host 'Atualize a Máquina de Edição (git pull na pasta do Básico e rode o instalador dele de novo).'; exit 1 }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Host 'Falta o Node.js 22.13 ou mais novo: winget install OpenJS.NodeJS.LTS'; exit 1 }
 node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)"
 if ($LASTEXITCODE -ne 0) { Write-Host 'Seu Node é antigo. Precisa da versão 22.13 ou mais nova.'; exit 1 }
@@ -22,12 +21,13 @@ try {
   $versao = node -p "require('./package.json').version"
   $json = @{ pasta = $pasta; versao = $versao } | ConvertTo-Json
   [IO.File]::WriteAllText((Join-Path $dados 'instalacao.json'), $json, (New-Object System.Text.UTF8Encoding $false))
-  $destino = Join-Path $skills 'oficina-de-conteudo'
-  if (Test-Path $destino) {
-    $backup = Join-Path $HOME (".claude\skills-backup\" + (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss') + "-$PID")
-    New-Item -ItemType Directory -Force $backup | Out-Null; Move-Item $destino $backup
-  }
+  # A skill /oficina-de-conteudo e o motor de edição da Oficina (cópia própria da Máquina com o modo escritório).
+  $backup = Join-Path $HOME (".claude\skills-backup\" + (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss') + "-$PID")
   New-Item -ItemType Directory -Force $skills | Out-Null
-  Copy-Item -Recurse (Join-Path $pasta 'skill\oficina-de-conteudo') $destino
+  foreach ($item in @(@('skill\oficina-de-conteudo', 'oficina-de-conteudo'), @('motor\oficina-de-conteudo-motor', 'oficina-de-conteudo-motor'))) {
+    $destino = Join-Path $skills $item[1]
+    if (Test-Path $destino) { New-Item -ItemType Directory -Force $backup | Out-Null; Move-Item $destino $backup }
+    Copy-Item -Recurse (Join-Path $pasta $item[0]) $destino
+  }
 } finally { Pop-Location }
 Write-Host 'Pronto! Feche e abra o Claude Code e chame /oficina-de-conteudo (ou rode: npm start, nesta pasta).'

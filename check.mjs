@@ -11,6 +11,7 @@ for (const s of salas) {
 }
 ok(fs.existsSync('dist/oficina.html'), 'página construída (npm run build)');
 ok(fs.existsSync('skill/oficina-de-conteudo/SKILL.md'), 'skill /oficina-de-conteudo presente');
+ok(fs.existsSync('motor/oficina-de-conteudo-motor/referencias/modo-escritorio.md'), 'motor de edição com o modo escritório presente');
 for (const f of ['lib/claude-runner.mjs', 'lib/execution.mjs', 'src/builders.js']) ok(fs.existsSync(f), `${f} presente (cópia da Oficina)`);
 for (const [c, m] of linhas) console.log(c ? '✓' : '✗', m);
 process.exit(linhas.every(([c]) => c) ? 0 : 1);
