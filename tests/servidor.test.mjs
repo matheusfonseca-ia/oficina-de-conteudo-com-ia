@@ -143,3 +143,64 @@ test('fechar() stops a running edição without marking the video as failed', { 
     assert.equal(ficha.erro, null); assert.equal(ficha.etapa, 'bruto-recebido');
   } finally { delete process.env.OFC_TEST_MODO; delete process.env.OFC_TEST_PID; }
 });
+
+const idDe = (e, id) => e.videos.find(v => v.id === id);
+const enviarBruto = (post, id, nome, bytes = new Uint8Array([1, 2, 3])) =>
+  post(`/api/videos/${id}/bruto`, bytes, { 'x-nome-arquivo': encodeURIComponent(nome), 'content-type': 'application/octet-stream' });
+
+test('ideia door: pesquisa → escolher → roteiro → aprovar → enviar a gravação → edição', { timeout: 30000 }, async t => {
+  const { post, ate, dados } = await subir(t);
+  const r = await post('/api/ideia', { tema: 'Como usar o n8n v1.2' });
+  assert.equal(r.status, 200);
+  const { id } = await r.json();
+  assert.match(id, /^\d{4}-\d{2}-\d{2}-como-usar-o-n8n-v1-2$/);
+  let e = await ate(e => idDe(e, id)?.etapa === 'escolha-referencia');
+  assert.ok(idDe(e, id).pesquisa.referencias.length >= 1);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'escolheu-referencia', indice: 9 })).status, 409);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'escolheu-referencia', indice: 0 })).status, 200);
+  await ate(e => idDe(e, id)?.etapa === 'aprovacao-roteiro');
+  assert.ok(fs.existsSync(path.join(dados, 'videos', id, 'roteiro.md')));
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' })).status, 200);
+  await ate(e => idDe(e, id)?.etapa === 'aguardando-gravacao');
+  assert.equal((await enviarBruto(post, id, 'gravei.MOV')).status, 200);
+  e = await ate(e => idDe(e, id)?.etapa === 'escolhas-edicao');
+  assert.equal(idDe(e, id).bruto, 'bruto.mov');
+  assert.ok(fs.existsSync(path.join(dados, 'videos', id, 'bruto.mov')));
+});
+
+test('ideia: empty or too long idea is refused; pularPesquisa goes straight to the script', { timeout: 20000 }, async t => {
+  const { post, ate } = await subir(t);
+  const vazia = await post('/api/ideia', { tema: '  ' });
+  assert.equal(vazia.status, 400); assert.match((await vazia.json()).erro, /Escreva a ideia/);
+  assert.equal((await post('/api/ideia', { tema: 'x'.repeat(301) })).status, 400);
+  const { id } = await (await post('/api/ideia', { tema: 'Sem pesquisa', pularPesquisa: true })).json();
+  const e = await ate(e => idDe(e, id)?.etapa === 'aprovacao-roteiro');
+  assert.ok(idDe(e, id).pular.includes('pesquisa'));
+});
+
+test('a recording for a video that is not waiting for it is refused and leaves no file behind', { timeout: 20000 }, async t => {
+  const { post, dados } = await subir(t);
+  const { id } = await (await post('/api/ideia', { tema: 'Ainda pesquisando' })).json();
+  const r = await enviarBruto(post, id, 'a.mp4');
+  assert.equal(r.status, 409); assert.match((await r.json()).erro, /não está esperando a gravação/);
+  const sobras = fs.readdirSync(path.join(dados, 'videos', id)).filter(n => n.startsWith('bruto') || n.startsWith('.parcial'));
+  assert.deepEqual(sobras, []);
+});
+
+test('cérebro: estado says empty, POST saves the profile, bad answers are 400 in pt-BR', async t => {
+  const { post, estado, base, dados } = await subir(t);
+  assert.equal((await estado()).cerebro.preenchido, false);
+  const ruim = await post('/api/cerebro', { nicho: '', publico: 'a', tom: 'b' });
+  assert.equal(ruim.status, 400); assert.match((await ruim.json()).erro, /nicho/);
+  assert.equal((await post('/api/cerebro', { nicho: 'IA', publico: 'lojas', tom: 'direto', arroba: 'eu', referencias: [] })).status, 200);
+  assert.equal((await estado()).cerebro.preenchido, true);
+  const c = await (await fetch(base + '/api/cerebro')).json();
+  assert.equal(c.perfil.arroba, '@eu');
+  assert.ok(fs.readFileSync(path.join(dados, 'cerebro', 'perfil.md'), 'utf8').includes('## Público\nlojas'));
+});
+
+test('cérebro and ideia POSTs need the x-oficina header', async t => {
+  const { base } = await subir(t);
+  assert.equal((await fetch(base + '/api/cerebro', { method: 'POST', body: '{}' })).status, 403);
+  assert.equal((await fetch(base + '/api/ideia', { method: 'POST', body: JSON.stringify({ tema: 'x' }) })).status, 403);
+});

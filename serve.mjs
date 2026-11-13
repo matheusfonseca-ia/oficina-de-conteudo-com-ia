@@ -15,8 +15,11 @@ import { CaixaDeEntrada, EXTENSOES_VIDEO } from './lib/caixa-de-entrada.mjs';
 import { Orquestrador } from './lib/orquestrador.mjs';
 import { PaineisMaquina } from './lib/painel-maquina.mjs';
 import { checarFerramentas } from './lib/checagem.mjs';
+import { criarFicha } from './lib/ficha.mjs';
+import { lerCerebro, salvarPerfil } from './lib/cerebro.mjs';
 
-const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular']);
+const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia']);
+const LIMITE_IDEIA = 300;
 const versao = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 async function responde(url) {
@@ -63,6 +66,25 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
     const ext = path.extname(nome); const base = nome.slice(0, nome.length - ext.length).replace(/[. ]+$/, '');
     return base ? base.slice(0, 120) + ext : '';
   };
+  // Recebe o corpo da requisição num arquivo .parcial-* dentro de `pasta`. Devolve o caminho, ou null se o envio caiu.
+  const receber = async (req, res, pasta, nome) => {
+    const parcial = path.join(pasta, `.parcial-${randomBytes(4).toString('hex')}-${nome}`);
+    const w = fs.createWriteStream(parcial);
+    try { await pipelineP(req, w); return parcial; }
+    catch (e) {
+      w.destroy(); fs.rmSync(parcial, { force: true });
+      console.error('upload interrompido:', e.message);
+      if (!res.writableEnded && !res.destroyed) json(res, 500, { erro: 'O envio do vídeo foi interrompido. Tente de novo.' });
+      return null;
+    }
+  };
+  const nomeDoVideo = (req, res) => {
+    let nomeBruto; try { nomeBruto = decodeURIComponent(req.headers['x-nome-arquivo'] || ''); } catch { json(res, 400, { erro: 'Nome de arquivo inválido.' }); return null; }
+    const nome = nomeSeguro(nomeBruto);
+    if (!nome) { json(res, 400, { erro: 'Nome de arquivo inválido.' }); return null; }
+    if (!EXTENSOES_VIDEO.includes(path.extname(nome).toLowerCase())) { json(res, 400, { erro: 'Esse arquivo não é um vídeo. Use MP4, MOV, MKV, WEBM ou M4V.' }); return null; }
+    return nome;
+  };
   // Só a porta em que este servidor está escutando (outro serviço local não pode se passar por ele).
   const hostOk = req => {
     const porta = server.address()?.port;
@@ -82,30 +104,39 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
       if (req.method === 'GET' && url.pathname === '/api/estado') {
         const fichas = store.listar();
         const videos = fichas.map(f => ({ ...f, andamento: orquestrador.andamento(f.id), painelUrl: paineis.aberto(f.id), trabalhando: orquestrador.ocupado(f.id) }));
-        return json(res, 200, { versao, salas: resumoDasSalas(salas, fichas, ultimaChecagem), videos, checagem: ultimaChecagem });
+        return json(res, 200, { versao, salas: resumoDasSalas(salas, fichas, ultimaChecagem), videos, checagem: ultimaChecagem,
+          cerebro: { preenchido: lerCerebro(store.cerebroDir).preenchido } });
       }
       if (req.method === 'POST' && url.pathname === '/api/checagem') { ultimaChecagem = checar(); return json(res, 200, ultimaChecagem); }
       if (req.method === 'POST' && url.pathname === '/api/upload') {
-        let nomeBruto; try { nomeBruto = decodeURIComponent(req.headers['x-nome-arquivo'] || ''); } catch { return json(res, 400, { erro: 'Nome de arquivo inválido.' }); }
-        const nome = nomeSeguro(nomeBruto);
-        if (!nome) return json(res, 400, { erro: 'Nome de arquivo inválido.' });
-        if (!EXTENSOES_VIDEO.includes(path.extname(nome).toLowerCase())) return json(res, 400, { erro: 'Esse arquivo não é um vídeo. Use MP4, MOV, MKV, WEBM ou M4V.' });
-        const parcial = path.join(store.caixaDir, `.parcial-${randomBytes(4).toString('hex')}-${nome}`);
-        const w = fs.createWriteStream(parcial);
-        try { await pipelineP(req, w); }
-        catch (e) {
-          w.destroy(); fs.rmSync(parcial, { force: true });
-          console.error('upload interrompido:', e.message);
-          if (!res.writableEnded && !res.destroyed) json(res, 500, { erro: 'O envio do vídeo foi interrompido. Tente de novo.' });
-          return;
-        }
+        const nome = nomeDoVideo(req, res); if (!nome) return;
+        const parcial = await receber(req, res, store.caixaDir, nome); if (!parcial) return;
         let destino = path.join(store.caixaDir, nome), n = 2;
         while (fs.existsSync(destino)) destino = path.join(store.caixaDir, `${path.parse(nome).name}-${n++}${path.extname(nome)}`);
         fs.renameSync(parcial, destino);
         caixa.varrer({ confiar: path.basename(destino) }); // só este arquivo dispensa a espera de tamanho estável
         return json(res, 200, { ok: true });
       }
-      const m = url.pathname.match(/^\/api\/videos\/([^/]+)\/(painel|evento|studio|final\.mp4)$/);
+      if (url.pathname === '/api/cerebro') {
+        if (req.method === 'GET') { const { perfil, texto } = lerCerebro(store.cerebroDir); return json(res, 200, { perfil, texto }); }
+        if (req.method !== 'POST') return json(res, 405, { erro: 'Método não permitido.' });
+        let dados; try { dados = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
+        try { return json(res, 200, { perfil: salvarPerfil(store.cerebroDir, dados) }); }
+        catch (e) { return json(res, 400, { erro: e.message }); }
+      }
+      if (req.method === 'POST' && url.pathname === '/api/ideia') {
+        let dados; try { dados = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
+        const tema = String(dados.tema ?? '').replace(/\s+/g, ' ').trim();
+        if (!tema) return json(res, 400, { erro: 'Escreva a ideia do vídeo.' });
+        if (tema.length > LIMITE_IDEIA) return json(res, 400, { erro: `A ideia pode ter até ${LIMITE_IDEIA} caracteres.` });
+        const id = store.novoIdDeTexto(tema);
+        fs.mkdirSync(store.pasta(id), { recursive: true });
+        const pular = [...salasInativas(salas), ...(dados.pularPesquisa === true ? ['pesquisa'] : [])];
+        const ficha = store.salvar(criarFicha({ id, porta: 'ideia', tema, pular }));
+        orquestrador.acordar();
+        return json(res, 200, ficha);
+      }
+      const m = url.pathname.match(/^\/api\/videos\/([^/]+)\/(painel|evento|studio|bruto|final\.mp4)$/);
       if (m) {
         let id; try { id = decodeURIComponent(m[1]); } catch { return json(res, 404, { erro: 'Vídeo não encontrado.' }); }
         const ficha = store.idValido(id) ? store.carregar(id) : null;
@@ -118,6 +149,19 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
           return enviar(res, arq, { 'content-type': 'video/mp4', 'content-disposition': `attachment; filename="${id}.mp4"` });
         }
         if (req.method !== 'POST') return json(res, 405, { erro: 'Método não permitido.' });
+        if (m[2] === 'bruto') {
+          if (ficha.etapa !== 'aguardando-gravacao' || orquestrador.ocupado(id)) return json(res, 409, { erro: 'Este vídeo não está esperando a gravação.' });
+          const nome = nomeDoVideo(req, res); if (!nome) return;
+          const parcial = await receber(req, res, pasta, nome); if (!parcial) return;
+          const arquivo = 'bruto' + path.extname(nome).toLowerCase();
+          const destino = path.join(pasta, arquivo);
+          // O arquivo vai pro lugar antes do evento: o evento acorda a Edição, que lê o bruto.
+          // O evento confere a etapa de novo (pode ter mudado durante o envio); se recusar, nada fica pra trás.
+          try {
+            fs.renameSync(parcial, destino);
+            return json(res, 200, orquestrador.evento(id, { tipo: 'bruto', arquivo }));
+          } catch (e) { fs.rmSync(parcial, { force: true }); fs.rmSync(destino, { force: true }); return json(res, 409, { erro: e.message }); }
+        }
         if (m[2] === 'painel') {
           if (ficha.etapa !== 'escolhas-edicao') return json(res, 409, { erro: 'Este vídeo não está nas escolhas da edição.' });
           try {
@@ -133,7 +177,7 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
         }
         let ev; try { ev = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
         if (!EVENTOS_DO_DONO.has(ev.tipo)) return json(res, 400, { erro: 'Ação desconhecida.' });
-        try { return json(res, 200, orquestrador.evento(id, { tipo: ev.tipo, texto: ev.texto, sala: ev.sala })); }
+        try { return json(res, 200, orquestrador.evento(id, { tipo: ev.tipo, texto: ev.texto, sala: ev.sala, indice: ev.indice })); }
         catch (e) { return json(res, 409, { erro: e.message }); }
       }
       return json(res, 404, { erro: 'Não encontrado.' });
