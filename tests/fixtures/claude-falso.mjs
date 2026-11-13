@@ -1,6 +1,6 @@
 // Test fixture: stands in for `claude`. Never touches the network.
 // Edição: reads the /oficina-de-conteudo-motor command and writes edit/estado.json in cwd.
-// Postagem: answers with OFC_TEST_POSTAGEM (raw text) or a valid JSON.
+// Postagem, Pesquisa e Roteiro: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO override).
 import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
@@ -27,6 +27,15 @@ if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   if (cmd === 'EXPORTAR' && modo !== 'sem-resumo') fs.writeFileSync(path.join(edit, 'resumo.md'), '# Resumo do vídeo\nTema: teste');
   // sem-resultado-feito: gravou o estado certo e saiu sem a mensagem final.
   if (modo !== 'sem-resultado-feito') emit({ type: 'result', subtype: 'success', result: 'feito' });
+} else if (/sala de PESQUISA/.test(prompt)) {
+  const texto = process.env.OFC_TEST_PESQUISA ?? JSON.stringify({ referencias: [
+    { titulo: 'Referência de teste 1', url: 'https://example.com/r1', plataforma: 'instagram', criador: '@teste', porQueFuncionou: 'Gancho com número logo no começo.', gancho: '3 erros que...' },
+    { titulo: 'Referência de teste 2', url: 'https://example.com/r2', plataforma: 'tiktok', criador: '@outro', porQueFuncionou: 'História pessoal curta.', gancho: '' },
+  ] });
+  emit({ type: 'result', subtype: 'success', result: texto });
+} else if (/sala de ROTEIRO/.test(prompt)) {
+  const texto = process.env.OFC_TEST_ROTEIRO ?? JSON.stringify({ titulo: 'Roteiro de teste', gancho: 'Gancho de teste', desenvolvimento: ['Bloco um', 'Bloco dois', 'Bloco três'], cta: 'Comenta EU', duracaoSegundos: 45 });
+  emit({ type: 'result', subtype: 'success', result: texto });
 } else {
   const texto = process.env.OFC_TEST_POSTAGEM ?? JSON.stringify({ legenda: 'Legenda de teste', hashtags: ['#ia', '#reels'], horario: '2099-01-01T18:00:00-03:00', motivoHorario: 'fim de tarde' });
   emit({ type: 'result', subtype: 'success', result: texto });
