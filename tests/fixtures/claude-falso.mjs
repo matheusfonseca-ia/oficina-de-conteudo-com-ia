@@ -1,6 +1,7 @@
 // Test fixture: stands in for `claude`. Never touches the network.
 // Edição: reads the /oficina-de-conteudo-motor command and writes edit/estado.json in cwd.
-// Capa, Postagem, Pesquisa, Roteiro e Análise: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO / _ANALISE override).
+// Capa, Postagem, Pesquisa, Roteiro, Análise e Resumo da semana: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO / _ANALISE / _RESUMO override).
+// O ramo do resumo vem antes do da Análise: o prompt do resumo também diz "sala de ANÁLISE".
 import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
@@ -28,6 +29,9 @@ if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   if (cmd === 'EXPORTAR' && modo !== 'sem-resumo') fs.writeFileSync(path.join(edit, 'resumo.md'), '# Resumo do vídeo\nTema: teste');
   // sem-resultado-feito: gravou o estado certo e saiu sem a mensagem final.
   if (modo !== 'sem-resultado-feito') emit({ type: 'result', subtype: 'success', result: 'feito' });
+} else if (/RESUMO DA SEMANA/.test(prompt)) {
+  const texto = process.env.OFC_TEST_RESUMO ?? JSON.stringify({ melhor: 'Post A', pior: 'Post B', padrao: 'Ganchos com número', sugestao: 'Fale de preços' });
+  emit({ type: 'result', subtype: 'success', result: texto });
 } else if (/sala de CAPA/.test(prompt)) {
   const texto = process.env.OFC_TEST_CAPA ?? JSON.stringify({ frame: 2, titulos: ['Título de teste um', 'Título dois'], promptIA: 'a person talking' });
   emit({ type: 'result', subtype: 'success', result: texto });
