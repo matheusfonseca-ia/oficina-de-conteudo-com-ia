@@ -44,3 +44,21 @@ test('rodarRoteiro with the fake Claude', async () => {
   const r = await rodarRoteiro({ pastaVideo: tmp(), ficha: { tema: 'IA', referencia: null, revisao: null, roteiro: null }, cerebroDir: tmp(), config });
   assert.equal(r.gancho, 'Gancho de teste');
 });
+
+test('prompt com oQueFuncionou leva a seção do Cérebro; sem ele, nada', () => {
+  const p = montarPromptRoteiro({ tema: 'IA', perfil: null, oQueFuncionou: '# O que funcionou nos seus posts\n- 2026-11-20: Gancho com número (https://x/1)' });
+  assert.ok(p.includes('## O que já funcionou pra este perfil\n# O que funcionou nos seus posts\n- 2026-11-20: Gancho com número (https://x/1)'));
+  assert.ok(!montarPromptRoteiro({ tema: 'IA', perfil: null }).includes('O que já funcionou'));
+});
+
+test('rodarRoteiro lê cerebro/o-que-funcionou.md e manda no prompt (o mesmo texto da Pesquisa)', async () => {
+  const cerebro = tmp();
+  fs.writeFileSync(path.join(cerebro, 'o-que-funcionou.md'), '# O que funcionou nos seus posts\n\n- 2026-11-20: Final com pergunta (https://x/2)\n');
+  let prompt;
+  const run = async o => { prompt = o.args[o.args.indexOf('-p') + 1]; return { text: JSON.stringify(ROT) }; };
+  await rodarRoteiro({ pastaVideo: tmp(), ficha: { tema: 'IA', referencia: null, revisao: null, roteiro: null }, cerebroDir: cerebro, config, run });
+  assert.ok(prompt.includes('## O que já funcionou pra este perfil\n# O que funcionou nos seus posts\n\n- 2026-11-20: Final com pergunta (https://x/2)'));
+  // sem o arquivo, a seção não aparece
+  await rodarRoteiro({ pastaVideo: tmp(), ficha: { tema: 'IA', referencia: null, revisao: null, roteiro: null }, cerebroDir: tmp(), config, run });
+  assert.ok(!prompt.includes('O que já funcionou'));
+});

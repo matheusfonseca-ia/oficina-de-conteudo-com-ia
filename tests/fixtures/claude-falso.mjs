@@ -1,6 +1,6 @@
 // Test fixture: stands in for `claude`. Never touches the network.
 // Edição: reads the /oficina-de-conteudo-motor command and writes edit/estado.json in cwd.
-// Capa, Postagem, Pesquisa e Roteiro: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO override).
+// Capa, Postagem, Pesquisa, Roteiro e Análise: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO / _ANALISE override).
 import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
@@ -39,6 +39,9 @@ if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   emit({ type: 'result', subtype: 'success', result: texto });
 } else if (/sala de ROTEIRO/.test(prompt)) {
   const texto = process.env.OFC_TEST_ROTEIRO ?? JSON.stringify({ titulo: 'Roteiro de teste', gancho: 'Gancho de teste', desenvolvimento: ['Bloco um', 'Bloco dois', 'Bloco três'], cta: 'Comenta EU', duracaoSegundos: 45 });
+  emit({ type: 'result', subtype: 'success', result: texto });
+} else if (/sala de ANÁLISE/.test(prompt)) {
+  const texto = process.env.OFC_TEST_ANALISE ?? JSON.stringify({ resumo: 'Foi bem no gancho.', funcionou: ['Gancho com número'], melhorar: ['Final mais curto'], nota: 4 });
   emit({ type: 'result', subtype: 'success', result: texto });
 } else {
   const texto = process.env.OFC_TEST_POSTAGEM ?? JSON.stringify({ legenda: 'Legenda de teste', hashtags: ['#ia', '#reels'], horario: '2099-01-01T18:00:00-03:00', motivoHorario: 'fim de tarde' });
