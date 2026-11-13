@@ -126,7 +126,7 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
       }
       if (req.method === 'POST' && url.pathname === '/api/ideia') {
         let dados; try { dados = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
-        const tema = String(dados.tema ?? '').replace(/\s+/g, ' ').trim();
+        const tema = typeof dados.tema === 'string' ? dados.tema.replace(/\s+/g, ' ').trim() : '';
         if (!tema) return json(res, 400, { erro: 'Escreva a ideia do vídeo.' });
         if (tema.length > LIMITE_IDEIA) return json(res, 400, { erro: `A ideia pode ter até ${LIMITE_IDEIA} caracteres.` });
         const id = store.novoIdDeTexto(tema);
@@ -155,12 +155,17 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
           const parcial = await receber(req, res, pasta, nome); if (!parcial) return;
           const arquivo = 'bruto' + path.extname(nome).toLowerCase();
           const destino = path.join(pasta, arquivo);
+          const limpar = arq => { try { fs.rmSync(arq, { force: true }); } catch (e) { console.error('limpeza:', e.message); } };
+          // O envio demorou: outro envio do mesmo vídeo pode ter chegado primeiro. Confere de novo, sem await até o fim do bloco.
+          const atual = store.carregar(id);
+          if (atual?.etapa !== 'aguardando-gravacao' || orquestrador.ocupado(id)) { limpar(parcial); return json(res, 409, { erro: 'Este vídeo não está esperando a gravação.' }); }
           // O arquivo vai pro lugar antes do evento: o evento acorda a Edição, que lê o bruto.
-          // O evento confere a etapa de novo (pode ter mudado durante o envio); se recusar, nada fica pra trás.
+          // Aqui não existe bruto vivo desta ficha (a conferência acima garante), então só este bloco pode ter criado o destino.
+          let criouDestino = false;
           try {
-            fs.renameSync(parcial, destino);
+            fs.renameSync(parcial, destino); criouDestino = true;
             return json(res, 200, orquestrador.evento(id, { tipo: 'bruto', arquivo }));
-          } catch (e) { fs.rmSync(parcial, { force: true }); fs.rmSync(destino, { force: true }); return json(res, 409, { erro: e.message }); }
+          } catch (e) { limpar(parcial); if (criouDestino) limpar(destino); return json(res, 409, { erro: e.message }); }
         }
         if (m[2] === 'painel') {
           if (ficha.etapa !== 'escolhas-edicao') return json(res, 409, { erro: 'Este vídeo não está nas escolhas da edição.' });

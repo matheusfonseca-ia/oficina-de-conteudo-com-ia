@@ -204,3 +204,38 @@ test('cérebro and ideia POSTs need the x-oficina header', async t => {
   assert.equal((await fetch(base + '/api/cerebro', { method: 'POST', body: '{}' })).status, 403);
   assert.equal((await fetch(base + '/api/ideia', { method: 'POST', body: JSON.stringify({ tema: 'x' }) })).status, 403);
 });
+
+test('two recordings sent at once: one wins, the other is refused and does not delete the winner', { timeout: 30000 }, async t => {
+  const { post, ate, dados, base } = await subir(t);
+  const { id } = await (await post('/api/ideia', { tema: 'Duas gravações', pularPesquisa: true })).json();
+  await ate(e => idDe(e, id)?.etapa === 'aprovacao-roteiro');
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' });
+  await ate(e => idDe(e, id)?.etapa === 'aguardando-gravacao');
+  // B: corpo em pedaços. Passa pela checagem de etapa (aguardando-gravacao) e fica no ar até A terminar.
+  const http = await import('node:http');
+  const respostaB = new Promise((ok, falha) => {
+    const reqB = http.request(`${base}/api/videos/${id}/bruto`, { method: 'POST', headers: { 'x-oficina': '1', 'x-nome-arquivo': 'b.mp4', 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' } },
+      res => { let b = ''; res.on('data', d => b += d); res.on('end', () => ok({ status: res.statusCode, corpo: b })); });
+    reqB.on('error', falha);
+    reqB.write(Buffer.from([9, 9]));
+    globalThis.__fecharB = () => reqB.end(Buffer.from([9]));
+  });
+  await new Promise(r => setTimeout(r, 200)); // o servidor já recebeu os cabeçalhos de B e passou da checagem de etapa
+  const a = await enviarBruto(post, id, 'a.mp4', new Uint8Array([1, 2, 3]));
+  assert.equal(a.status, 200);
+  globalThis.__fecharB(); delete globalThis.__fecharB;
+  const b = await respostaB;
+  assert.equal(b.status, 409); assert.match(JSON.parse(b.corpo).erro, /não está esperando a gravação/);
+  const e = await ate(e => ['bruto-recebido', 'escolhas-edicao'].includes(idDe(e, id)?.etapa));
+  assert.notEqual(idDe(e, id).etapa, 'aguardando-gravacao');
+  const pasta = path.join(dados, 'videos', id);
+  assert.deepEqual([...fs.readFileSync(path.join(pasta, 'bruto.mp4'))], [1, 2, 3]); // o arquivo de A continua lá, intacto
+  assert.deepEqual(fs.readdirSync(pasta).filter(n => n.startsWith('.parcial')), []);
+});
+
+test('ideia: a tema that is not a string is refused with 400', async t => {
+  const { post } = await subir(t);
+  for (const tema of [{ a: 1 }, ['x'], 5, null]) {
+    const r = await post('/api/ideia', { tema }); assert.equal(r.status, 400); assert.match((await r.json()).erro, /Escreva a ideia/);
+  }
+});
