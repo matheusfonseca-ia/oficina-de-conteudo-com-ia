@@ -252,8 +252,8 @@ test('ideia: a tema that is not a string is refused with 400', async t => {
   }
 });
 
-async function ateAprovacaoDoPost(t) {
-  const s = await subir(t);
+async function ateAprovacaoDoPost(t, opcoes) {
+  const s = await subir(t, opcoes);
   await s.post('/api/upload', new Uint8Array([1, 2, 3]), { 'x-nome-arquivo': encodeURIComponent('Capa.mp4'), 'content-type': 'application/octet-stream' });
   let e = await s.ate(e => e.videos[0]?.etapa === 'escolhas-edicao');
   const id = e.videos[0].id;
@@ -303,14 +303,16 @@ async function comPostForMe(t, opcoes) {
 }
 const conectarPostForMe = (post, chave = CHAVE_PFM) => post('/api/conexoes', { servico: 'postForMe', chave });
 // Como ateAprovacaoDoPost, mas com o Post for Me já conectado (a chave certa do falso).
-async function ateAprovacaoDoPostComPfm(t) {
-  const s = await ateAprovacaoDoPost(t);
+async function ateAprovacaoDoPostComPfm(t, opcoes) {
+  const s = await ateAprovacaoDoPost(t, opcoes);
   assert.equal((await conectarPostForMe(s.post)).status, 200);
   return s;
 }
 const TT = { id: 'spc_tt', plataforma: 'tiktok', usuario: '@teste' };
 const YT = { id: 'spc_yt', plataforma: 'youtube', usuario: 'Teste' };
 const lerJson = arq => JSON.parse(fs.readFileSync(arq, 'utf8'));
+// Agendado pra amanhã: só um agendamento com horário longe ainda pode ser cancelado.
+const amanha = () => new Date(Date.now() + 86_400_000).toISOString();
 
 test('conexões: conectar o Post for Me testa a chave, o estado nunca mostra a chave e traz os avisos e o último resumo', { timeout: 20000 }, async t => {
   await comPostForMe(t);
@@ -388,7 +390,7 @@ test('cancelar o agendamento apaga o post no Post for Me e a ficha volta pra apr
   // fora de agendado: 409
   const antes = await post(`/api/videos/${id}/cancelar`);
   assert.equal(antes.status, 409); assert.equal((await antes.json()).erro, 'Este vídeo não está agendado.');
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   assert.equal((await (await fetch(base + '/api/estado')).json()).videos[0].etapa, 'agendado');
   assert.equal((await fetch(`${base}/api/videos/${id}/cancelar`, { method: 'POST' })).status, 403, 'sem x-oficina é recusado');
@@ -407,7 +409,7 @@ test('cancelar o agendamento apaga o post no Post for Me e a ficha volta pra apr
 test('cancelar com o Post for Me fora do ar é 502 e a ficha continua agendada', { timeout: 30000 }, async t => {
   const pfm = await comPostForMe(t);
   const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   await pfm.fechar();
   const r = await post(`/api/videos/${id}/cancelar`);
@@ -431,7 +433,7 @@ test('cancelar um post que já saiu em alguma rede é 409 e não apaga nada', { 
 test('cancelar sem a chave do Post for Me guardada é 400 com o aviso pra conectar', { timeout: 30000 }, async t => {
   await comPostForMe(t);
   const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   await fetch(base + '/api/conexoes/postForMe', { method: 'DELETE', headers: { 'x-oficina': '1' } });
   const r = await post(`/api/videos/${id}/cancelar`);
@@ -538,7 +540,7 @@ const apagarNoFalso = postId => fetch(`${process.env.OFC_POSTFORME_URL}/v1/socia
 test('cancelar um post que o Post for Me já não tem (404) conta como cancelado: a ficha volta pra aprovação do post', { timeout: 30000 }, async t => {
   const pfm = await comPostForMe(t);
   const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   assert.equal((await apagarNoFalso('sp_1')).status, 200); // apagado direto no Post for Me
   const r = await post(`/api/videos/${id}/cancelar`);
@@ -551,7 +553,7 @@ test('cancelar um post que o Post for Me já não tem (404) conta como cancelado
 test('cancelar com dois posts, o primeiro já apagado: apaga o segundo e a ficha volta pra aprovação do post', { timeout: 40000 }, async t => {
   const pfm = await comPostForMe(t, { modo: 'falha-youtube' });
   const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   await app.relogio.volta(); // tiktok saiu, youtube falhou
   await post(`/api/videos/${id}/evento`, { tipo: 'republicar', conta: 'spc_yt' }); // segundo post (sp_2), spc_yt esperando
@@ -570,11 +572,81 @@ test('cancelar com dois posts, o primeiro já apagado: apaga o segundo e a ficha
 test('cancelar com outra recusa do Post for Me (não 404) continua sendo 502 com a ficha intacta', { timeout: 30000 }, async t => {
   await comPostForMe(t);
   const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
-  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: amanha() } });
   await app.orquestrador.esperarOcioso();
   // chave trocada por uma recusada: o DELETE volta 401 (CHAVE), que não é "post já apagado"
   fs.writeFileSync(path.join(app.orquestrador.config.dados, 'config.json'), JSON.stringify({ postForMe: 'chave-que-o-falso-recusa-123', redes: ['spc_tt'] }));
   const r = await post(`/api/videos/${id}/cancelar`);
   assert.equal(r.status, 502); assert.match((await r.json()).erro, /chave do Post for Me não funcionou/);
   assert.equal((await (await fetch(base + '/api/estado')).json()).videos[0].etapa, 'agendado');
+});
+
+// ---------- Revisão final ----------
+const NAO_CANCELA = 'Esse post já está sendo publicado e não dá mais pra cancelar por aqui.';
+
+test('cancelar é recusado em "Publicar agora" e com o horário vencido ou a menos de 2 minutos; nada é apagado', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  let r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 409); assert.equal((await r.json()).erro, NAO_CANCELA);
+  const store = app.orquestrador.store;
+  for (const daquiMs of [-60_000, 90_000]) { // vencido; dentro da margem
+    const f = store.carregar(id); f.publicacao.pedido.quando = new Date(Date.now() + daquiMs).toISOString(); store.salvar(f);
+    r = await post(`/api/videos/${id}/cancelar`);
+    assert.equal(r.status, 409, String(daquiMs)); assert.equal((await r.json()).erro, NAO_CANCELA);
+  }
+  assert.equal(pfm.chamadas.filter(c => c.metodo === 'DELETE').length, 0);
+  assert.equal((await (await fetch(base + '/api/estado')).json()).videos[0].etapa, 'agendado');
+  // com o horário longe, cancela
+  const f = store.carregar(id); f.publicacao.pedido.quando = amanha(); store.salvar(f);
+  assert.equal((await post(`/api/videos/${id}/cancelar`)).status, 200);
+});
+
+test('aprovar pra publicar com a legenda acima do limite de uma rede marcada é 409 antes de mudar a ficha', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id, dados, estado } = await ateAprovacaoDoPostComPfm(t);
+  const store = app.orquestrador.store;
+  const f = store.carregar(id); f.postagem.legenda = 'a'.repeat(300); store.salvar(f);
+  const X = { id: 'spc_x', plataforma: 'x', usuario: '@x' };
+  const r = await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, X], quando: null } });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).erro, 'A legenda passa do limite do X (280 caracteres). Desmarque essa rede ou peça uma legenda mais curta.');
+  const v = (await estado()).videos[0];
+  assert.equal(v.etapa, 'aprovacao-pacote'); assert.equal(v.publicacao, null); assert.equal(v.erro, null);
+  assert.equal('redes' in lerJson(path.join(dados, 'config.json')), false);
+  assert.equal(pfm.chamadas.length, 1); // só o teste da chave ao conectar
+  // sem o X, passa
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } })).status, 200);
+});
+
+test('aprovar pra publicar sem o edit/final.mp4 é 409 antes de mudar a ficha', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id, estado } = await ateAprovacaoDoPostComPfm(t);
+  fs.rmSync(path.join(app.orquestrador.store.pasta(id), 'edit', 'final.mp4'));
+  const r = await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).erro, 'Não achei o vídeo exportado (edit/final.mp4). Exporte de novo na sala de Edição.');
+  const v = (await estado()).videos[0];
+  assert.equal(v.etapa, 'aprovacao-pacote'); assert.equal(v.publicacao, null);
+  assert.equal(pfm.posts.length, 0);
+  // "Postar na mão" (sem publicar) não depende disso
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' })).status, 200);
+});
+
+test('envio que falhou: "Voltar pra aprovação" leva a ficha de volta com o erro e as tentativas', { timeout: 30000 }, async t => {
+  await comPostForMe(t);
+  const publicar = async () => { throw new Error('O Post for Me recusou o pedido.'); };
+  const { post, app, id, estado } = await ateAprovacaoDoPostComPfm(t, { runners: { publicar } });
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'voltar-pra-aprovacao' })).status, 409); // ainda não enviou
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  let v = (await estado()).videos[0];
+  assert.equal(v.etapa, 'publicando'); assert.equal(v.erro.mensagem, 'O Post for Me recusou o pedido.');
+  const r = await post(`/api/videos/${id}/evento`, { tipo: 'voltar-pra-aprovacao' });
+  assert.equal(r.status, 200);
+  v = (await estado()).videos[0];
+  assert.equal(v.etapa, 'aprovacao-pacote'); assert.equal(v.erro, null);
+  assert.equal(v.publicacao.erro, 'O Post for Me recusou o pedido.'); assert.equal(v.publicacao.tentativas, 0);
 });

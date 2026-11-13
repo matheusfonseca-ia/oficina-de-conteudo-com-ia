@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { salaDaEtapa, textoDaEspera } from '../lib/ficha.mjs';
+import { salaDaEtapa, textoDaEspera, podeCancelar, podeVoltarPraAprovacao } from '../lib/ficha.mjs';
 import { criarPacotes } from './pacote.js';
 import { calcularMovimentos } from './movimentos.js';
 import { ETAPAS } from '../lib/ficha.mjs';
@@ -156,10 +156,14 @@ function pintarPublicar(el, v) {
   const btn = el.querySelector('button[data-acao="publicar"]'); if (btn) btn.textContent = e.quando === 'agendar' ? 'Agendar' : 'Publicar';
 }
 
+// TikTok goes as a draft (lib/publicar.mjs): "publicado" there means it is in the app's drafts, not live yet.
+const RASCUNHO = new Set(['tiktok', 'tiktok_business']);
+const NO_RASCUNHO = 'chegou como rascunho no app do TikTok: publique de lá';
 // One line per network of a publication: where it went, the link when it is live, the error and the way out when it failed.
 function redesDaPublicacao(v) {
   const itens = Object.entries(v.publicacao?.contas || {}).map(([id, c]) => {
     const nome = rotuloConta(c);
+    if (c.status === 'publicado' && RASCUNHO.has(c.plataforma)) return `<li>${esc(nome)} · ${esc(NO_RASCUNHO)}</li>`;
     if (c.status === 'publicado') return `<li>${linkDaConta(c, nome)} · no ar</li>`;
     if (c.status === 'manual') return `<li>${esc(nome)} · você postou na mão</li>`;
     if (c.status === 'falhou') return `<li>${esc(nome)} · não deu certo<div class="erro">${esc(c.erro || 'O Post for Me não conseguiu postar.')}</div>
@@ -172,12 +176,14 @@ function agendado(v) {
   const p = v.publicacao; if (!p) return '';
   const quando = p.pedido?.quando && new Date(p.pedido.quando) > new Date() ? `Agendado pra ${horaTexto(p.pedido.quando)}` : 'Publicando agora…';
   const saiu = Object.values(p.contas || {}).some(c => c.status === 'publicado');
+  // Same rule as the cancel route: only a schedule still more than 2 minutes away (never a "Publicar agora").
   return `<div class="etapa"><b>${esc(quando)}</b></div>${redesDaPublicacao(v)}`
-    + (saiu ? '' : '<div class="acoes"><button data-acao="cancelar-agendamento">Cancelar agendamento</button></div>');
+    + (saiu || !podeCancelar(p) ? '' : '<div class="acoes"><button data-acao="cancelar-agendamento">Cancelar agendamento</button></div>');
 }
-// Links of the posts that are live (a post made by hand has none).
+// Links of the posts that are live (a post made by hand has none); a TikTok draft says where it is instead.
 function linksDosPosts(v) {
-  const links = Object.values(v.publicacao?.contas || {}).filter(c => c.status === 'publicado' && urlSegura(c.link)).map(c => linkDaConta(c, rotuloConta(c)));
+  const links = Object.values(v.publicacao?.contas || {}).filter(c => c.status === 'publicado' && (RASCUNHO.has(c.plataforma) || urlSegura(c.link)))
+    .map(c => (RASCUNHO.has(c.plataforma) ? `${esc(rotuloConta(c))} · ${esc(NO_RASCUNHO)}` : linkDaConta(c, rotuloConta(c))));
   return links.length ? `<div class="links-posts">${links.join(' · ')}</div>` : '';
 }
 
@@ -242,7 +248,9 @@ function cartao(v, pfm = false) {
   const baixar = DEPOIS_DA_EXPORTACAO.has(v.etapa) ? `<a class="botao" download href="/api/videos/${encodeURIComponent(v.id)}/final.mp4">Baixar vídeo</a>` : '';
   const copiar = v.postagem ? '<button data-acao="copiar">Copiar legenda</button>' : '';
   const comAcoesProprias = !v.erro && !v.trabalhando && (v.etapa === 'aprovacao-pacote' || v.etapa === 'pronto-pra-postar');
-  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button>${v.erro.sala === 'pesquisa' ? '<button data-acao="pular-pesquisa">Seguir sem pesquisa</button>' : ''}${baixar}</div>`;
+  // A send that failed can go back to the post approval (untick a network, or post by hand), unless a post was already created.
+  const podeVoltar = v.etapa === 'publicando' && podeVoltarPraAprovacao(v.publicacao);
+  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button>${podeVoltar ? '<button data-acao="voltar-pra-aprovacao">Voltar pra aprovação</button>' : ''}${v.erro.sala === 'pesquisa' ? '<button data-acao="pular-pesquisa">Seguir sem pesquisa</button>' : ''}${baixar}</div>`;
   else if (baixar && !comAcoesProprias) corpo += `<div class="acoes">${baixar}</div>`;
   if (!v.erro && !v.trabalhando) {
     if (v.etapa === 'escolha-referencia') corpo += referencias(v);
@@ -370,6 +378,7 @@ async function agir(btn) {
     else if (acao === 'conectar-pfm') dispatchEvent(new CustomEvent('abrir-chefe', { detail: { aba: 'conexoes', servico: 'postForMe' } }));
     else if (acao === 'postado') await api.post(base + '/evento', { tipo: 'postado' });
     else if (acao === 'tentar') await api.post(base + '/evento', { tipo: 'tentar-de-novo' });
+    else if (acao === 'voltar-pra-aprovacao') await api.post(base + '/evento', { tipo: 'voltar-pra-aprovacao' });
     else if (acao === 'pular-postagem') await api.post(base + '/evento', { tipo: 'pular', sala: 'postagem' });
     else if (acao === 'referencia') await api.post(base + '/evento', { tipo: 'escolheu-referencia', indice: Number(btn.dataset.indice) });
     else if (acao === 'sem-referencia') await api.post(base + '/evento', { tipo: 'escolheu-referencia', indice: null });

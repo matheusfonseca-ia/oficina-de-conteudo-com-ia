@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criarFicha, aplicar, ETAPAS, SEQUENCIA, ETAPAS_POR_EVENTO, textoDaEspera, salaDaEtapa, emTrabalho, salaDoAjuste } from '../lib/ficha.mjs';
+import { criarFicha, aplicar, ETAPAS, SEQUENCIA, ETAPAS_POR_EVENTO, textoDaEspera, salaDaEtapa, emTrabalho, salaDoAjuste, MARGEM_CANCELAR_MS, podeCancelar, podeVoltarPraAprovacao } from '../lib/ficha.mjs';
 
 const ETAPA1 = ['pesquisa', 'roteiro', 'capa', 'analise'];
 const novo = (extra = {}) => criarFicha({ id: 'v1', porta: 'bruto', bruto: 'bruto.mp4', pular: ETAPA1, agora: 1, ...extra });
@@ -417,6 +417,63 @@ test('segundo aprovou em publicando ou agendado é recusado (clique duplo)', () 
   const pub = aplicar(noPacote(), ev, AGORA);
   assert.throws(() => aplicar(pub, ev, AGORA), /não está esperando aprovação/);
   assert.throws(() => aplicar(emAgendado({ spc_tt: 'esperando', spc_yt: 'esperando' }), ev, AGORA), /não está esperando aprovação/);
+});
+
+// ---------- Revisão final: saída do envio com erro, cancelar só antes da hora ----------
+test('voltar-pra-aprovacao: envio com erro volta pra aprovação do post com o erro e as mesmas tentativas', () => {
+  let f = aplicar(comTentativas(1), { tipo: 'publicou', resultados: [TT_ERRO, YT_ERRO] }, AGORA);
+  f = aplicar(f, { tipo: 'aprovou', publicar: { contas: CONTAS, quando: null } }, AGORA);
+  f = aplicar(f, { tipo: 'falhou', mensagem: 'O Post for Me recusou o pedido.' }, AGORA);
+  assert.equal(f.etapa, 'publicando'); assert.ok(f.erro);
+  const g = aplicar(f, { tipo: 'voltar-pra-aprovacao' }, AGORA);
+  assert.equal(g.etapa, 'aprovacao-pacote'); assert.equal(g.erro, null);
+  assert.equal(g.publicacao.tentativas, 1); assert.equal(g.publicacao.erro, 'O Post for Me recusou o pedido.');
+  assert.equal(g.historico.at(-1).nota, 'voltou pra aprovação');
+  // aprovar de novo repete o mesmo número de tentativa (o mesmo external_id: nunca um segundo post)
+  const h = aplicar(g, { tipo: 'aprovou', publicar: { contas: CONTAS, quando: null } }, AGORA);
+  assert.equal(h.etapa, 'publicando'); assert.equal(h.publicacao.tentativas, 1); assert.equal(h.publicacao.erro, null);
+});
+
+test('voltar-pra-aprovacao é recusado fora de publicando com erro', () => {
+  const MSG = /Esse vídeo não está com erro no envio\./;
+  const pub = aplicar(noPacote(), { tipo: 'aprovou', publicar: { contas: CONTAS, quando: null } }, AGORA);
+  assert.throws(() => aplicar(pub, { tipo: 'voltar-pra-aprovacao' }, AGORA), MSG); // enviando, sem erro
+  assert.throws(() => aplicar(noPacote(), { tipo: 'voltar-pra-aprovacao' }, AGORA), MSG);
+  assert.throws(() => aplicar(emAgendado({ spc_tt: 'esperando', spc_yt: 'esperando' }), { tipo: 'voltar-pra-aprovacao' }, AGORA), MSG);
+  const outraSala = aplicar({ ...novo(), etapa: 'postagem' }, { tipo: 'falhou', mensagem: 'x' }, AGORA);
+  assert.throws(() => aplicar(outraSala, { tipo: 'voltar-pra-aprovacao' }, AGORA), MSG);
+  // "Tentar de novo" numa rede depois que outra já saiu: voltar pra aprovação postaria de novo na que saiu
+  let r = aplicar(emAgendado({ spc_tt: 'esperando', spc_yt: 'esperando' }), { tipo: 'publicou', resultados: [TT_OK, YT_ERRO] }, AGORA);
+  r = aplicar(aplicar(r, { tipo: 'republicar', conta: 'spc_yt' }, AGORA), { tipo: 'falhou', mensagem: 'x' }, AGORA);
+  assert.throws(() => aplicar(r, { tipo: 'voltar-pra-aprovacao' }, AGORA), /já foi criado no Post for Me/);
+  assert.equal(podeVoltarPraAprovacao(r.publicacao), false);
+});
+
+test('voltar-pra-aprovacao recusa quando outra rede ainda espera num post já criado (não esquece o post)', () => {
+  // TT esperando no post pst_1, YT falhou → Tentar de novo no YT → o envio falha
+  let r = aplicar(emAgendado({ spc_tt: 'esperando', spc_yt: 'falhou' }), { tipo: 'republicar', conta: 'spc_yt' }, AGORA);
+  r = aplicar(r, { tipo: 'falhou', mensagem: 'x' }, AGORA);
+  assert.equal(r.etapa, 'publicando'); assert.equal(r.publicacao.contas.spc_tt.postId, 'pst_1');
+  assert.equal(podeVoltarPraAprovacao(r.publicacao), false);
+  assert.throws(() => aplicar(r, { tipo: 'voltar-pra-aprovacao' }, AGORA), /já foi criado no Post for Me/);
+  // só postIds guardado (sem postId nas contas) também conta como post criado
+  const s = structuredClone(r);
+  for (const c of Object.values(s.publicacao.contas)) c.postId = null;
+  assert.throws(() => aplicar(s, { tipo: 'voltar-pra-aprovacao' }, AGORA), /já foi criado no Post for Me/);
+  // primeira tentativa que falhou: nenhum post criado, a volta vale
+  const p = aplicar(aplicar(noPacote(), { tipo: 'aprovou', publicar: { contas: CONTAS, quando: null } }, AGORA), { tipo: 'falhou', mensagem: 'x' }, AGORA);
+  assert.equal(podeVoltarPraAprovacao(p.publicacao), true);
+  assert.equal(aplicar(p, { tipo: 'voltar-pra-aprovacao' }, AGORA).etapa, 'aprovacao-pacote');
+});
+
+test('podeCancelar: só com horário marcado e mais de 2 minutos antes', () => {
+  assert.equal(MARGEM_CANCELAR_MS, 2 * 60_000);
+  const pub = quando => ({ pedido: { contas: CONTAS, quando } });
+  assert.equal(podeCancelar(pub(null), AGORA), false);                                         // Publicar agora
+  assert.equal(podeCancelar(pub(new Date(AGORA - 60_000).toISOString()), AGORA), false);       // horário vencido
+  assert.equal(podeCancelar(pub(new Date(AGORA + MARGEM_CANCELAR_MS).toISOString()), AGORA), false); // dentro da margem
+  assert.equal(podeCancelar(pub(new Date(AGORA + MARGEM_CANCELAR_MS + 1000).toISOString()), AGORA), true);
+  assert.equal(podeCancelar(null, AGORA), false);
 });
 
 test('quando é guardado como ISO normalizado', () => {

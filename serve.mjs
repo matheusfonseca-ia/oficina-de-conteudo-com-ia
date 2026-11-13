@@ -15,7 +15,8 @@ import { CaixaDeEntrada, EXTENSOES_VIDEO } from './lib/caixa-de-entrada.mjs';
 import { Orquestrador } from './lib/orquestrador.mjs';
 import { PaineisMaquina } from './lib/painel-maquina.mjs';
 import { checarFerramentas } from './lib/checagem.mjs';
-import { criarFicha, aplicar } from './lib/ficha.mjs';
+import { criarFicha, aplicar, podeCancelar } from './lib/ficha.mjs';
+import { conferirLimites, conferirVideo, legendaDoPost } from './lib/publicar.mjs';
 import { lerCerebro, salvarPerfil } from './lib/cerebro.mjs';
 import { estadoConexoes, conectar, desconectar, chaveDe, redesPreferidas, salvarRedes, SERVICOS } from './lib/conexoes.mjs';
 import { criarHiggsfield } from './lib/higgsfield.mjs';
@@ -25,7 +26,7 @@ import { escreverResumo, ultimoResumo, contarResumos } from './lib/resumo-da-sem
 
 // What the page may ask for. The system events (`publicou`, `ler-numeros`, `cancelou-agendamento`) are NOT here:
 // only the clock and the cancel route send them. Cancelling is the route POST /api/videos/:id/cancelar.
-const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia', 'escolheu-capa', 'republicar', 'postar-na-mao']);
+const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia', 'escolheu-capa', 'republicar', 'postar-na-mao', 'voltar-pra-aprovacao']);
 // How each connection checks a key before saving it.
 const TESTAR_CHAVE = { higgsfield: chave => criarHiggsfield({ chave }).testar(), postForMe: chave => criarPostForMe({ chave }).testar() };
 const SEM_CHAVE_POSTFORME = 'Conecte o Post for Me primeiro.';
@@ -239,6 +240,8 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
           if (orquestrador.ocupado(id)) return json(res, 409, { erro: 'A sala ainda está trabalhando neste vídeo. Espere terminar.' });
           // The ficha's own rules first (e.g. "já saiu em alguma rede"): nothing is deleted at Post for Me if the ficha would refuse.
           try { aplicar(ficha, { tipo: 'cancelou-agendamento' }); } catch (e) { return json(res, 409, { erro: e.message }); }
+          // "Publicar agora", or a time that has come: Post for Me is already pushing it to the networks.
+          if (!podeCancelar(ficha.publicacao)) return json(res, 409, { erro: 'Esse post já está sendo publicado e não dá mais pra cancelar por aqui.' });
           const chave = chaveDe(config.dados, 'postForMe');
           if (!chave) return json(res, 400, { erro: SEM_CHAVE_POSTFORME });
           const cliente = criarPostForMe({ chave });
@@ -256,6 +259,13 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
         }
         let ev; try { ev = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
         if (!EVENTOS_DO_DONO.has(ev.tipo)) return json(res, 400, { erro: 'Ação desconhecida.' });
+        // Approving for publishing: what would fail every time (caption over a ticked network's limit, no exported MP4)
+        // is refused now, while the ficha is still on the approval and the student can untick the network.
+        if (ev.tipo === 'aprovou' && ev.publicar && ficha.etapa === 'aprovacao-pacote') {
+          const contas = Array.isArray(ev.publicar.contas) ? ev.publicar.contas.filter(c => c && typeof c.id === 'string') : [];
+          try { conferirLimites(legendaDoPost(ficha.postagem), contas); conferirVideo(pasta); }
+          catch (e) { return json(res, 409, { erro: e.message }); }
+        }
         try {
           const nova = orquestrador.evento(id, { tipo: ev.tipo, texto: ev.texto, sala: ev.sala, indice: ev.indice, publicar: ev.publicar, conta: ev.conta });
           // Approving the post for publishing: the ticked networks are the starting point of the next video.

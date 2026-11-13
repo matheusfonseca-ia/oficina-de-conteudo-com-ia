@@ -141,8 +141,29 @@ test('rodarPublicacao sobe vídeo e capa, cria 1 post com external_id e devolve 
 
 test('rodarPublicacao agendado leva scheduled_at do pedido', async t => {
   const { pfm, rodar } = await cenario(t);
-  await rodar(fichaPublicando({ quando: FUTURO }));
+  await rodar(fichaPublicando({ quando: FUTURO }), { agora: AGORA });
   assert.equal(pfm.posts[0].scheduled_at, new Date(FUTURO).toISOString());
+});
+
+test('rodarPublicacao com o horário já vencido (ou a menos de 1 minuto) publica agora, sem scheduled_at', async t => {
+  const { pfm, rodar } = await cenario(t);
+  const ficha = fichaPublicando({ quando: FUTURO });
+  await rodar(ficha, { agora: Date.parse(FUTURO) + 3_600_000 }); // "Tentar de novo" horas depois
+  assert.equal('scheduled_at' in pfm.posts[0], false);
+  ficha.id = 'v2';
+  await rodar(ficha, { agora: Date.parse(FUTURO) - 30_000 }); // upload demorado: faltam 30 s
+  assert.equal(pfm.posts[1].external_id, 'v2:1'); assert.equal('scheduled_at' in pfm.posts[1], false);
+  ficha.id = 'v3';
+  await rodar(ficha, { agora: Date.parse(FUTURO) - 5 * 60_000 }); // faltam 5 minutos: ainda agenda
+  assert.equal(pfm.posts[2].scheduled_at, new Date(FUTURO).toISOString());
+});
+
+test('I1: se o Post for Me ignora o filtro de external_id, um post antigo de outro id não é reaproveitado', async t => {
+  const { pfm, cliente, rodar } = await cenario(t, { modo: 'filtro-ignorado' });
+  await cliente.criarPost({ caption: 'post antigo do dono', social_accounts: ['spc_tt'], external_id: 'outra-ficha:1' });
+  const pub = await rodar(fichaPublicando());
+  assert.equal(pfm.posts.length, 2); assert.equal(pfm.posts[1].external_id, 'v1:1');
+  assert.deepEqual(pub.postIds, ['sp_2']); assert.equal(pub.contas.spc_tt.postId, 'sp_2');
 });
 
 test('rodarPublicacao sem capa escolhida sobe só o vídeo e o corpo não tem thumbnail_url', async t => {

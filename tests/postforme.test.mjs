@@ -91,9 +91,34 @@ test('criarPost + postsPorExterno acham o post pelo id externo', async t => {
   const criado = await c.criarPost({ caption: 'oi', social_accounts: ['spc_tt'], external_id: 'f1:1' });
   assert.deepEqual(criado, { id: 'sp_1', status: 'processing' });
   assert.equal(pfm.posts.length, 1); assert.equal(pfm.posts[0].external_id, 'f1:1');
-  assert.deepEqual(await c.postsPorExterno('f1:1'), [{ id: 'sp_1', status: 'processing' }]);
+  assert.deepEqual(await c.postsPorExterno('f1:1'), [{ id: 'sp_1', status: 'processing', external_id: 'f1:1' }]);
   assert.deepEqual(await c.postsPorExterno('f1:2'), []);
   assert.equal(pfm.chamadas.at(-1).caminho, `/v1/social-posts?external_id=${encodeURIComponent('f1:2')}`);
+});
+
+test('postsPorExterno confere o external_id de cada post: se a API ignora o filtro, o post de outro id não volta', async t => {
+  const { cliente } = await cenario(t, 'filtro-ignorado');
+  const c = cliente();
+  await c.criarPost({ caption: 'antigo', social_accounts: ['spc_tt'], external_id: 'outra:1' });
+  await c.criarPost({ caption: 'sem id', social_accounts: ['spc_tt'] });
+  await c.criarPost({ caption: 'este', social_accounts: ['spc_tt'], external_id: 'f1:1' });
+  assert.deepEqual(await c.postsPorExterno('f1:1'), [{ id: 'sp_3', status: 'processing', external_id: 'f1:1' }]);
+  assert.deepEqual(await c.postsPorExterno('f1:2'), []);
+});
+
+test('metricas confere o platform_post_id: se a API ignora o filtro, pega o item certo ou null', async t => {
+  const { cliente } = await cenario(t, 'filtro-ignorado');
+  const c = cliente();
+  await c.criarPost({ caption: 'primeiro', social_accounts: ['spc_tt'] });
+  await c.criarPost({ caption: 'segundo', social_accounts: ['spc_tt'] }); // o feed devolve este primeiro
+  const m = await c.metricas('spc_tt', 'rede_spc_tt_sp_1');
+  assert.equal(m.idNaRede, 'rede_spc_tt_sp_1'); assert.equal(m.legenda, 'primeiro');
+  assert.equal(await c.metricas('spc_tt', 'rede_que_nao_existe'), null);
+});
+
+test('metricas: id da rede em número num lado e texto no outro ainda bate', async () => {
+  const c = criarPostForMe({ chave: CHAVE_PFM, base: 'http://x', fetch: async () => respostaJson(200, { data: [{ platform_post_id: 7, caption: 'oi' }] }) });
+  assert.equal((await c.metricas('spc_tt', '7')).legenda, 'oi');
 });
 
 test('criarPost com scheduled_at volta como scheduled', async t => {

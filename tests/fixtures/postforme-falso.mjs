@@ -1,6 +1,8 @@
 // Test fixture: a local stand-in for the Post for Me API. Never touches the network.
 // modo: 'ok' (every network posts fine), 'falha-youtube' (spc_yt fails with "Video too short"),
-//       'processando' (no results yet), 'sem-feed' (the feed has nothing).
+//       'processando' (no results yet), 'sem-feed' (the feed has nothing),
+//       'filtro-ignorado' (GET /v1/social-posts ignores ?external_id= and the feed ignores ?platform_post_id=:
+//       everything comes back, newest first in the feed — the client has to filter by itself).
 // `chamadas` records every request (metodo, caminho with query, comAutorizacao, cabecalhos, corpo) so tests
 // can assert what was NOT called. DELETE of an unknown or already deleted post id answers 404. `posts` holds the body of every POST /v1/social-posts (post n is "sp_<n>").
 import http from 'node:http';
@@ -53,8 +55,8 @@ export async function iniciarPostForMeFalso({ modo = 'ok' } = {}) {
       if (req.method === 'GET' && p === '/v1/social-posts') {
         const externo = url.searchParams.get('external_id');
         const data = posts.map((dados, i) => ({ dados, id: idDoPost(i) }))
-          .filter(x => !apagados.has(x.id) && x.dados.external_id === externo)
-          .map(x => ({ id: x.id, status: x.dados.scheduled_at ? 'scheduled' : 'processing', external_id: externo }));
+          .filter(x => !apagados.has(x.id) && (modo === 'filtro-ignorado' || x.dados.external_id === externo))
+          .map(x => ({ id: x.id, status: x.dados.scheduled_at ? 'scheduled' : 'processing', external_id: x.dados.external_id ?? null }));
         return json(200, { data, meta: { total: data.length } });
       }
       const mpost = p.match(/^\/v1\/social-posts\/([^/]+)$/);
@@ -85,7 +87,7 @@ export async function iniciarPostForMeFalso({ modo = 'ok' } = {}) {
           .reverse()
           .map(x => ({ platform_post_id: `rede_${conta}_${x.id}`, platform_url: `https://exemplo.com/${conta}/${x.id}`, caption: x.dados.caption ?? '', posted_at: new Date().toISOString(), metrics: { ...METRICAS[dono.platform] } }));
         const idRede = url.searchParams.get('platform_post_id');
-        if (idRede) itens = itens.filter(x => x.platform_post_id === idRede);
+        if (idRede && modo !== 'filtro-ignorado') itens = itens.filter(x => x.platform_post_id === idRede);
         const limite = Number(url.searchParams.get('limit'));
         if (limite) itens = itens.slice(0, limite);
         return json(200, { data: itens, meta: { total: itens.length } });
