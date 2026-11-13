@@ -6,6 +6,7 @@ import path from 'node:path';
 import { FichasStore } from '../lib/fichas-store.mjs';
 import { Orquestrador } from '../lib/orquestrador.mjs';
 import { criarFicha } from '../lib/ficha.mjs';
+import { lerAprendizados } from '../lib/aprendizados.mjs';
 
 const FAKE = path.resolve('tests/fixtures/claude-falso.mjs');
 
@@ -145,4 +146,50 @@ test('a Studio URL belongs to one video: a new run with the same URL clears it o
   await o.reabrirStudio('b');
   assert.equal(store.carregar('b').edicao.studioUrl, 'http://outra');
   assert.equal(store.carregar('c').edicao.studioUrl, null);
+});
+
+const REF = { titulo: 'A', url: 'https://a', porQueFuncionou: 'x' };
+const ROT = { titulo: 'T', gancho: 'G', desenvolvimento: ['d'], cta: 'C', duracaoSegundos: 30 };
+function ideia(store, id = 'i') {
+  fs.mkdirSync(store.pasta(id));
+  return store.salvar(criarFicha({ id, porta: 'ideia', tema: 'IA', pular: ['capa', 'analise'], agora: 1 }));
+}
+
+test('ideia: pesquisa → escolha → roteiro → aprovação → aguardando-gravacao, each room once, with the chosen reference', async () => {
+  const chamadas = [];
+  const { store, o } = montar({
+    pesquisa: async ({ cerebroDir }) => { chamadas.push('pesquisa'); assert.ok(cerebroDir); return { referencias: [REF] }; },
+    roteiro: async ({ ficha }) => { chamadas.push('roteiro:' + (ficha.referencia?.titulo || '-')); return ROT; },
+  });
+  ideia(store); o.acordar(); await o.esperarOcioso();
+  assert.equal(store.carregar('i').etapa, 'escolha-referencia');
+  o.evento('i', { tipo: 'escolheu-referencia', indice: 0 }); await o.esperarOcioso();
+  assert.equal(store.carregar('i').etapa, 'aprovacao-roteiro'); assert.deepEqual(store.carregar('i').roteiro, ROT);
+  o.evento('i', { tipo: 'aprovou' }); await o.esperarOcioso();
+  assert.equal(store.carregar('i').etapa, 'aguardando-gravacao');
+  assert.deepEqual(chamadas, ['pesquisa', 'roteiro:A']);
+});
+
+test('a failing pesquisa stops with the error and can be skipped to roteiro', async () => {
+  const { store, o } = montar({ pesquisa: async () => { throw new Error('A Pesquisa não achou referências.'); }, roteiro: async () => ROT });
+  ideia(store); o.acordar(); await o.esperarOcioso();
+  const f = store.carregar('i'); assert.equal(f.etapa, 'pesquisa'); assert.match(f.erro.mensagem, /não achou/);
+  o.evento('i', { tipo: 'pular', sala: 'pesquisa' }); await o.esperarOcioso();
+  assert.equal(store.carregar('i').etapa, 'aprovacao-roteiro');
+});
+
+test('revisar records the adjustment for pesquisa, roteiro and postagem, never for edição', async () => {
+  const { store, o, nova } = montar({
+    pesquisa: async () => ({ referencias: [REF] }), roteiro: async () => ROT,
+    edicao: async () => ({ estado: { etapa: 'revisao', studioUrl: 'http://s' }, sessao: 'S' }),
+  });
+  ideia(store); o.acordar(); await o.esperarOcioso();
+  o.evento('i', { tipo: 'revisar', texto: 'só em português' }); await o.esperarOcioso();
+  o.evento('i', { tipo: 'escolheu-referencia', indice: null }); await o.esperarOcioso();
+  o.evento('i', { tipo: 'revisar', texto: 'gancho mais curto' }); await o.esperarOcioso();
+  assert.match(lerAprendizados(store.cerebroDir, 'pesquisa'), /só em português/);
+  assert.match(lerAprendizados(store.cerebroDir, 'roteiro'), /gancho mais curto/);
+  nova('e', 'aprovacao-video');
+  o.evento('e', { tipo: 'revisar', texto: 'legenda maior' }); await o.esperarOcioso();
+  assert.equal(fs.existsSync(path.join(store.cerebroDir, 'aprendizados', 'edicao.md')), false);
 });
