@@ -89,3 +89,51 @@ test('aplicar never mutates the input and appends to historico', () => {
   assert.deepEqual(g.historico.at(-1), { em: 9, etapa: 'escolhas-edicao', nota: 'concluiu' });
   assert.equal(g.atualizadaEm, 9);
 });
+
+const REFS = { referencias: [{ titulo: 'A', url: 'https://a', porQueFuncionou: 'x' }, { titulo: 'B', url: 'https://b', porQueFuncionou: 'y' }] };
+const ROT = { titulo: 'T', gancho: 'G', desenvolvimento: ['d1'], cta: 'C', duracaoSegundos: 40 };
+const ideia = (extra = {}) => criarFicha({ id: 'i1', porta: 'ideia', tema: 'IA no varejo', pular: ['capa', 'analise'], agora: 1, ...extra });
+
+test('porta bruto skips pesquisa and roteiro on its own and starts with empty fields', () => {
+  const f = criarFicha({ id: 'b1', porta: 'bruto', bruto: 'bruto.mp4', agora: 1 });
+  assert.ok(f.pular.includes('pesquisa') && f.pular.includes('roteiro'));
+  assert.equal(f.pesquisa, null); assert.equal(f.referencia, null); assert.equal(f.roteiro, null);
+});
+
+test('ideia path: pesquisa → escolha → roteiro → revisar → aprovação → gravação → bruto', () => {
+  let f = ideia();
+  assert.equal(f.etapa, 'pesquisa');
+  f = aplicar(f, { tipo: 'concluiu', dados: { pesquisa: REFS } });
+  assert.equal(f.etapa, 'escolha-referencia'); assert.deepEqual(f.pesquisa, REFS);
+  f = aplicar(f, { tipo: 'escolheu-referencia', indice: 1 });
+  assert.equal(f.etapa, 'roteiro'); assert.equal(f.referencia.titulo, 'B');
+  f = aplicar(f, { tipo: 'concluiu', dados: { roteiro: ROT } });
+  assert.equal(f.etapa, 'aprovacao-roteiro'); assert.deepEqual(f.roteiro, ROT);
+  f = aplicar(f, { tipo: 'revisar', texto: 'mais curto' });
+  assert.equal(f.etapa, 'roteiro'); assert.equal(f.revisao, 'mais curto');
+  f = aplicar(f, { tipo: 'concluiu', dados: { roteiro: ROT } });
+  assert.equal(f.revisao, null);
+  f = aplicar(f, { tipo: 'aprovou' }); assert.equal(f.etapa, 'aguardando-gravacao');
+  f = aplicar(f, { tipo: 'bruto', arquivo: 'bruto.mp4' });
+  assert.equal(f.etapa, 'bruto-recebido'); assert.equal(f.bruto, 'bruto.mp4');
+});
+
+test('escolheu-referencia: null means no reference; a missing or bad index is refused in pt-BR', () => {
+  const f = aplicar(ideia(), { tipo: 'concluiu', dados: { pesquisa: REFS } });
+  const sem = aplicar(f, { tipo: 'escolheu-referencia', indice: null });
+  assert.equal(sem.referencia, null); assert.equal(sem.etapa, 'roteiro');
+  for (const indice of [undefined, 2, -1, '0', 1.5]) assert.throws(() => aplicar(f, { tipo: 'escolheu-referencia', indice }), /Essa referência não existe/);
+});
+
+test('revisar on escolha-referencia searches again with the text; aprovar there is refused', () => {
+  const f = aplicar(ideia(), { tipo: 'concluiu', dados: { pesquisa: REFS } });
+  const r = aplicar(f, { tipo: 'revisar', texto: 'só em português' });
+  assert.equal(r.etapa, 'pesquisa'); assert.equal(r.revisao, 'só em português'); assert.deepEqual(r.pesquisa, REFS);
+  assert.throws(() => aplicar(f, { tipo: 'aprovou' }), /não está esperando aprovação/);
+});
+
+test('pular pesquisa while it failed goes straight to roteiro without a reference', () => {
+  let f = aplicar(ideia(), { tipo: 'falhou', mensagem: 'sem referências' });
+  f = aplicar(f, { tipo: 'pular', sala: 'pesquisa' });
+  assert.equal(f.etapa, 'roteiro'); assert.equal(f.erro, null); assert.equal(f.referencia, null);
+});
