@@ -4,6 +4,7 @@ import { criarPacotes } from './pacote.js';
 import { calcularMovimentos } from './movimentos.js';
 import { ETAPAS } from '../lib/ficha.mjs';
 import { ORDEM } from './layout.js';
+import { iniciarFormularios, abrirCerebro, abrirLeitura, escolherDestino } from './formularios.js';
 
 const ultimaSala = new Map();
 export function aplicarEstado(ESC, estado, pacotes) {
@@ -22,18 +23,28 @@ export function aplicarEstado(ESC, estado, pacotes) {
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const $ = s => document.querySelector(s);
-const ESPERAS = new Set(['escolhas-edicao', 'aprovacao-video', 'aprovacao-pacote', 'pronto-pra-postar']);
+const ESPERAS = new Set(['escolha-referencia', 'aprovacao-roteiro', 'aguardando-gravacao', 'escolhas-edicao', 'aprovacao-video', 'aprovacao-pacote', 'pronto-pra-postar']);
 const DEPOIS_DA_EXPORTACAO = new Set(['capa', 'postagem', 'aprovacao-pacote', 'pronto-pra-postar', 'agendado', 'analise', 'concluido']);
 const notificados = new Set();
 
 function trilha(v) {
-  const atual = ORDEM.indexOf(salaDaEtapa(v.etapa));
+  const sala = salaDaEtapa(v.etapa);
+  // Esperando a gravação: o roteiro está feito e a edição ainda não começou.
+  const atual = sala === 'gravacao' ? ORDEM.indexOf('roteiro') + 0.5 : ORDEM.indexOf(sala);
   return '<div class="trilha">' + ORDEM.map((s, i) => {
     const cls = v.pular.includes(s) ? 'pulada' : v.etapa === 'concluido' || i < atual ? 'feita' : i === atual ? 'aqui' : '';
     return `<i class="${cls}" title="${s}"></i>`;
   }).join('') + '</div>';
 }
 function horaTexto(iso) { return new Date(iso).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+const roteiroCurto = r => `${r.titulo}\n\nGancho: ${r.gancho}\n\n${r.desenvolvimento.map((b, i) => `${i + 1}. ${b}`).join('\n')}${r.cta ? `\n\nChamada: ${r.cta}` : ''}`;
+function referencias(v) {
+  const itens = (v.pesquisa?.referencias || []).map((r, i) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.titulo)}</a>${r.criador ? ` <span class="etapa">${esc(r.criador)}</span>` : ''}
+    <div class="etapa">${esc(r.porQueFuncionou)}</div><button data-acao="referencia" data-indice="${i}">Usar esta</button></li>`).join('');
+  return `<ol class="refs">${itens}</ol><textarea data-campo="revisao" placeholder="Quer outras? Ex.: mais vídeos de humor, só em português"></textarea>
+    <div class="acoes"><button data-acao="revisar">Buscar outras</button><button data-acao="sem-referencia">Seguir sem referência</button></div>`;
+}
 
 function cartao(v) {
   const meta = ETAPAS[v.etapa];
@@ -43,9 +54,15 @@ function cartao(v) {
   const baixar = DEPOIS_DA_EXPORTACAO.has(v.etapa) ? `<a class="botao" download href="/api/videos/${encodeURIComponent(v.id)}/final.mp4">Baixar vídeo</a>` : '';
   const copiar = v.postagem ? '<button data-acao="copiar">Copiar legenda</button>' : '';
   const comAcoesProprias = !v.erro && !v.trabalhando && (v.etapa === 'aprovacao-pacote' || v.etapa === 'pronto-pra-postar');
-  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button>${baixar}</div>`;
+  if (v.erro) corpo += `<div class="erro">${esc(v.erro.mensagem)}</div><div class="acoes"><button data-acao="tentar">Tentar de novo</button>${v.erro.sala === 'pesquisa' ? '<button data-acao="pular-pesquisa">Seguir sem pesquisa</button>' : ''}${baixar}</div>`;
   else if (baixar && !comAcoesProprias) corpo += `<div class="acoes">${baixar}</div>`;
   if (!v.erro && !v.trabalhando) {
+    if (v.etapa === 'escolha-referencia') corpo += referencias(v);
+    if (v.etapa === 'aprovacao-roteiro' && v.roteiro) corpo += `<div class="legenda">${esc(roteiroCurto(v.roteiro))}</div>${v.referencia ? `<div class="etapa">Inspirado em: ${esc(v.referencia.titulo)}</div>` : ''}
+      <textarea data-campo="revisao" placeholder="O que mudar no roteiro? Ex.: gancho mais forte, mais curto"></textarea>
+      <div class="acoes"><button data-acao="ler">Ler em tela cheia</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar roteiro</button></div>`;
+    if (v.etapa === 'aguardando-gravacao') corpo += `<div class="etapa">Grave o vídeo e mande o arquivo aqui.</div>
+      <div class="acoes">${v.roteiro ? '<button data-acao="ler">Ler pra gravar</button>' : ''}<label class="botao forte">Enviar gravação<input type="file" accept="video/*" data-acao="enviar-bruto" hidden></label></div>`;
     if (v.etapa === 'escolhas-edicao') corpo += `<div class="acoes"><button class="forte" data-acao="painel">Escolher formato e estilo</button></div>`;
     if (v.etapa === 'aprovacao-video') corpo += `<textarea data-campo="revisao" placeholder="O que mudar? Ex.: legenda maior, tira a música"></textarea>
       <div class="acoes"><button data-acao="studio">Assistir no Studio</button><button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar e exportar</button></div>`;
@@ -120,6 +137,10 @@ async function agir(btn) {
     else if (acao === 'postado') await api.post(base + '/evento', { tipo: 'postado' });
     else if (acao === 'tentar') await api.post(base + '/evento', { tipo: 'tentar-de-novo' });
     else if (acao === 'pular-postagem') await api.post(base + '/evento', { tipo: 'pular', sala: 'postagem' });
+    else if (acao === 'referencia') await api.post(base + '/evento', { tipo: 'escolheu-referencia', indice: Number(btn.dataset.indice) });
+    else if (acao === 'sem-referencia') await api.post(base + '/evento', { tipo: 'escolheu-referencia', indice: null });
+    else if (acao === 'pular-pesquisa') await api.post(base + '/evento', { tipo: 'pular', sala: 'pesquisa' });
+    else if (acao === 'ler') abrirLeitura(v.roteiro);
     else if (acao === 'copiar') { await navigator.clipboard.writeText(`${v.postagem?.legenda ?? ""}\n\n${(v.postagem?.hashtags || []).join(' ')}`); btn.textContent = 'Copiada!'; }
     if (acao === 'revisar' || acao === 'aprovar') rascunhos.delete(id);
     if (acao === 'aprovar' && window.Notification?.permission === 'default') Notification.requestPermission();
@@ -150,18 +171,40 @@ function criarPlacas(ESC) {
   };
 }
 
+async function comAviso(nome, fn) {
+  const el = $('#envio'); el.textContent = `Enviando ${nome}…`; el.hidden = false;
+  try { return await fn(); } finally { el.hidden = true; }
+}
+// Um arquivo e roteiros esperando gravação: pergunta de qual vídeo é. Vários arquivos viram vídeos novos.
+async function enviarArquivos(arquivos) {
+  const lista = [...arquivos];
+  const esperando = (window.ESC.ultimoEstado?.videos || []).filter(v => v.etapa === 'aguardando-gravacao' && !v.trabalhando && !v.erro);
+  let destino = null;
+  if (lista.length === 1 && esperando.length) { destino = await escolherDestino(lista[0], esperando); if (destino === undefined) return; }
+  for (const f of lista) {
+    try { await comAviso(f.name, () => destino ? api.uploadBruto(destino, f) : api.upload(f)); } catch (err) { alert(err.message); }
+  }
+}
+let cerebroOferecido = false;
+
 export function iniciarPainel(ESC) {
   const pacotes = criarPacotes(ESC); ESC.aoTick(pacotes.tick);
   const placas = criarPlacas(ESC);
+  iniciarFormularios();
   $('#lista').addEventListener('click', e => { const b = e.target.closest('button[data-acao]'); if (b) agir(b); });
   $('#ja-gravei').addEventListener('click', () => $('#arquivo').click());
-  $('#arquivo').addEventListener('change', async e => { const f = e.target.files[0]; if (f) { try { await api.upload(f); } catch (err) { alert(err.message); } } e.target.value = ''; });
+  $('#arquivo').addEventListener('change', async e => { const arqs = [...e.target.files]; e.target.value = ''; if (arqs.length) await enviarArquivos(arqs); });
+  $('#lista').addEventListener('change', async e => {
+    const input = e.target.closest('input[data-acao="enviar-bruto"]'); if (!input) return;
+    const f = input.files[0], id = input.closest('.ficha').dataset.id; input.value = '';
+    if (f) try { await comAviso(f.name, () => api.uploadBruto(id, f)); } catch (err) { alert(err.message); }
+  });
   const arquivos = e => [...(e.dataTransfer?.types || [])].includes('Files');
   $('#lista').addEventListener('input', e => { const t = e.target.closest('textarea[data-campo]'); if (t) rascunhos.set(t.closest('.ficha').dataset.id, t.value); });
   $('#lista').addEventListener('toggle', e => { if (e.target.tagName === 'DETAILS') concluidosAberto = e.target.open; }, true);
   addEventListener('dragover', e => { if (!arquivos(e)) return; e.preventDefault(); document.body.classList.add('soltando'); });
   addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('soltando'); });
-  addEventListener('drop', async e => { if (!arquivos(e)) return; e.preventDefault(); document.body.classList.remove('soltando'); for (const f of e.dataTransfer.files) { try { await api.upload(f); } catch (err) { alert(err.message); } } });
+  addEventListener('drop', async e => { if (!arquivos(e)) return; e.preventDefault(); document.body.classList.remove('soltando'); await enviarArquivos(e.dataTransfer.files); });
   $('#modal-fechar').addEventListener('click', fecharModal);
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) && !document.activeElement?.isContentEditable) { document.body.classList.toggle('limpo'); ESC.enquadrar(); } });
   ESC.aoClicarSala(k => { const v = ESC.ultimoEstado?.videos.find(x => salaDaEtapa(x.etapa) === k); if (v) document.querySelector(`.ficha[data-id="${CSS.escape(v.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
@@ -174,6 +217,7 @@ export function iniciarPainel(ESC) {
     if (e) try {
       ESC.ultimoEstado = e;
       aplicarEstado(ESC, e, pacotes); ESC.aoEstado?.(e); placas(e); renderLista(e);
+      if (e.cerebro && !e.cerebro.preenchido && !cerebroOferecido) { cerebroOferecido = true; abrirCerebro().catch(err => console.warn('cérebro:', err.message)); }
       if (modalId && e.videos.find(v => v.id === modalId)?.etapa !== 'escolhas-edicao') fecharModal();
     } catch (err) { console.warn('estado:', err.message); }
     setTimeout(ciclo, 1500);

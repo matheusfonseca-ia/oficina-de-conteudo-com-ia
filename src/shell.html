@@ -118,12 +118,12 @@
   body.limpo #painel, body.limpo .badge, body.limpo .pill { display: none !important; }
   .portas { display: flex; gap: 8px; margin-bottom: 14px; }
   .portas button { flex: 1; }
-  button, a.botao {
+  button, a.botao, label.botao {
     font: 600 13px var(--ui); border-radius: 7px; border: 1px solid var(--hairline); background: var(--surface-soft); color: var(--ink);
     padding: 9px 12px; cursor: pointer; text-decoration: none; display: inline-block;
   }
-  button:hover, a.botao:hover { border-color: rgba(236,234,227,.35); }
-  button.forte { background: var(--ink); color: #15161A; border-color: var(--ink); }
+  button:hover, a.botao:hover, label.botao:hover { border-color: rgba(236,234,227,.35); }
+  button.forte, label.botao.forte { background: var(--ink); color: #15161A; border-color: var(--ink); }
   button:disabled { opacity: .45; cursor: default; }
   .grupo { font: 700 11px var(--ui); letter-spacing: .08em; color: var(--grey); margin: 16px 0 8px; text-transform: uppercase; }
   .ficha { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: var(--surface-soft); }
@@ -140,6 +140,20 @@
   .legenda { white-space: pre-wrap; font-size: 13px; background: #0F1013; border-radius: 8px; padding: 8px; margin-top: 8px; max-height: 160px; overflow: auto; }
   .barra { height: 6px; background: rgba(236,234,227,.12); border-radius: 3px; margin-top: 6px; } .barra b { display: block; height: 100%; background: var(--ink); border-radius: 3px; }
   details summary { cursor: pointer; }
+  #topbar #abrir-cerebro { margin-left: auto; }
+  .refs { padding-left: 18px; margin: 8px 0; } .refs li { margin-bottom: 10px; font-size: 13px; } .refs a { color: var(--ink); } .refs button { margin-top: 4px; }
+  .janela { position: fixed; inset: 0; background: rgba(15,16,19,.72); display: none; align-items: center; justify-content: center; z-index: 60; }
+  .janela.aberta { display: flex; }
+  .janela .caixa { width: min(560px, 92vw); max-height: 90vh; overflow: auto; background: #1E1F24; border: 1px solid var(--hairline); border-radius: 14px; padding: 18px; }
+  .janela h2 { margin: 0 0 6px; font-size: 16px; }
+  .janela label { display: block; font-size: 13px; color: var(--grey); margin-top: 12px; }
+  .janela textarea, .janela input[type=text], .janela input[type=url] { width: 100%; font: 14px var(--ui); color: var(--ink); background: #1B1C21; border: 1px solid var(--hairline); border-radius: 8px; padding: 8px; margin-top: 4px; }
+  .janela label.checar { display: flex; gap: 8px; align-items: center; color: var(--ink); }
+  .janela label.checar input { width: auto; margin: 0; }
+  #leitura .caixa { width: min(900px, 94vw); height: 90vh; display: flex; flex-direction: column; }
+  #leitura-texto { flex: 1; overflow: auto; white-space: pre-wrap; font-size: 30px; line-height: 1.5; color: var(--ink); margin-top: 12px; }
+  #destino-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  #envio { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1E1F24; border: 1px solid var(--hairline); border-radius: 99px; padding: 8px 16px; font-size: 13px; z-index: 70; }
   #modal { position: fixed; inset: 0; background: rgba(15,16,19,.72); display: none; align-items: center; justify-content: center; z-index: 50; }
   #modal.aberto { display: flex; }
   #modal .caixa { width: min(1100px, 92vw); height: 86vh; background: #1E1F24; border: 1px solid var(--hairline); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
@@ -155,12 +169,12 @@
 <body class="dark">
 <canvas id="scene"></canvas>
 <div id="hud"></div>
-<div id="topbar"><span class="marca">OFICINA DE CONTEÚDO</span></div>
+<div id="topbar"><span class="marca">OFICINA DE CONTEÚDO</span><button id="abrir-cerebro" title="O que a Oficina sabe sobre você">Cérebro</button></div>
 <div id="vignette"></div>
 <button id="overviewBtn">◂ VISÃO GERAL</button>
 <aside id="painel">
   <div class="portas">
-    <button id="tenho-ideia" disabled title="Chega na próxima atualização">Tenho uma ideia</button>
+    <button id="tenho-ideia">Tenho uma ideia</button>
     <button id="ja-gravei" class="forte">Já gravei</button>
   </div>
   <input id="arquivo" type="file" accept="video/*" hidden>
@@ -172,6 +186,30 @@
   <button id="zHome" title="visão geral (0)">⌂</button>
 </div>
 <div id="modal"><div class="caixa"><div class="topo"><span>Escolha formato e estilo do vídeo</span><span><a id="modal-aba" target="_blank" rel="noopener">abrir em outra aba</a> · <button id="modal-fechar">Fechar</button></span></div><iframe title="Painel da Máquina de Edição"></iframe></div></div>
+<div id="ideia" class="janela"><form id="ideia-form" class="caixa">
+  <h2>Tenho uma ideia</h2>
+  <div class="etapa">A Pesquisa acha vídeos que já funcionaram e o Roteiro escreve o texto pra você gravar.</div>
+  <label>Qual é a ideia do vídeo?<textarea id="ideia-tema" rows="3" maxlength="300" placeholder="Ex.: 3 jeitos de usar IA pra responder cliente no WhatsApp"></textarea></label>
+  <label class="checar"><input type="checkbox" id="ideia-pular"> Já sei o que quero: pular a pesquisa</label>
+  <div class="acoes"><button type="button" id="ideia-cancelar">Cancelar</button><button type="submit" id="ideia-enviar" class="forte">Começar</button></div>
+</form></div>
+<div id="cerebro" class="janela"><form id="cerebro-form" class="caixa">
+  <h2>Conte quem você é</h2>
+  <div class="etapa">A Oficina usa isso em todas as salas: na pesquisa, no roteiro e na legenda. Dá pra mudar quando quiser no botão Cérebro, lá em cima.</div>
+  <div id="cerebro-antigo" class="etapa" hidden>Você já tinha um perfil escrito à mão. Ao salvar, ele fica guardado no arquivo perfil-antigo.md, dentro da pasta cerebro.</div>
+  <label>Sobre o que você fala? (o seu nicho)<textarea name="nicho" rows="2" maxlength="600"></textarea></label>
+  <label>Pra quem você fala? (o seu público)<textarea name="publico" rows="2" maxlength="600"></textarea></label>
+  <label>Como você fala? (o seu tom de voz)<textarea name="tom" rows="2" maxlength="600" placeholder="Ex.: direto, com humor, sem palavrão"></textarea></label>
+  <label>O @ do seu perfil<input type="text" name="arroba" maxlength="31" placeholder="@seuperfil"></label>
+  <label>Até 3 vídeos que você admira (links)<input type="url" name="ref1" placeholder="https://"><input type="url" name="ref2" placeholder="https://"><input type="url" name="ref3" placeholder="https://"></label>
+  <div class="acoes"><button type="button" id="cerebro-depois">Depois</button><button type="submit" id="cerebro-salvar" class="forte">Salvar</button></div>
+</form></div>
+<div id="leitura" class="janela"><div class="caixa">
+  <div class="acoes" style="justify-content:space-between;align-items:center;margin:0"><h2 id="leitura-titulo"></h2><button type="button" id="leitura-fechar">Fechar</button></div>
+  <div id="leitura-texto"></div>
+</div></div>
+<div id="destino" class="janela"><div class="caixa"><h2>De qual vídeo é esta gravação?</h2><div class="etapa" id="destino-arquivo"></div><div id="destino-lista"></div></div></div>
+<div id="envio" hidden></div>
 <div id="soltar">Solte o vídeo bruto aqui</div>
 <div id="fechado" role="alert" hidden>A Oficina foi fechada. Abra o Claude Code e chame /oficina-de-conteudo de novo.</div>
 <!--APP-->
