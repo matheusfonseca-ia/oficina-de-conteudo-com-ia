@@ -7,11 +7,11 @@ import { carregarSalas, ORDEM_SALAS, salasInativas } from '../lib/salas.mjs';
 import { resumoDasSalas } from '../lib/resumo.mjs';
 import { criarFicha } from '../lib/ficha.mjs';
 
-test('salas.json: six rooms in clockwise order, etapa 1 has edicao and postagem active', () => {
+test('salas.json: six rooms in clockwise order; etapa 2 adds pesquisa and roteiro', () => {
   const s = carregarSalas();
   assert.deepEqual(s.map(x => x.chave), ORDEM_SALAS);
-  assert.deepEqual(s.filter(x => x.ativa).map(x => x.chave), ['edicao', 'postagem']);
-  assert.deepEqual(salasInativas(s), ['pesquisa', 'roteiro', 'capa', 'analise']);
+  assert.deepEqual(s.filter(x => x.ativa).map(x => x.chave), ['pesquisa', 'roteiro', 'edicao', 'postagem']);
+  assert.deepEqual(salasInativas(s), ['capa', 'analise']);
 });
 
 test('carregarSalas refuses a missing room or a bad colour, in pt-BR', () => {
@@ -33,7 +33,7 @@ test('resumo: problema beats esperando beats trabalhando; fila counts every fich
   assert.equal(r.edicao.texto, 'Editando o vídeo');
   assert.equal(r.postagem.estado, 'esperando'); assert.equal(r.postagem.texto, 'Aprove o post');
   assert.equal(r.edicao.contador, 2); // c (aprovacao-pacote) e d (concluido) já passaram pela edição
-  assert.equal(r.pesquisa.estado, 'inativa'); assert.equal(r.pesquisa.texto, 'Chega na próxima atualização');
+  assert.equal(r.capa.estado, 'inativa'); assert.equal(r.capa.texto, 'Chega na próxima atualização');
   const comErro = resumoDasSalas(salas, [...fichas, f('e', 'aprovacao-video', { erro: { sala: 'edicao', mensagem: 'x', em: 1 } })]);
   assert.equal(comErro.find(x => x.chave === 'edicao').estado, 'problema');
 });
@@ -43,4 +43,15 @@ test('resumo: failed tool check puts edição in problema with the message', () 
   const ed = r.find(x => x.chave === 'edicao');
   assert.equal(ed.estado, 'problema'); assert.equal(ed.texto, 'Falta instalar o FFmpeg');
   assert.equal(r.find(x => x.chave === 'postagem').estado, 'ocioso');
+});
+
+test('resumo: Pesquisa and Roteiro count only videos that went through them', () => {
+  const salas = carregarSalas();
+  const porIdeia = { ...criarFicha({ id: 'i', porta: 'ideia', tema: 't', agora: 1 }), etapa: 'aguardando-gravacao' };
+  porIdeia.historico.push({ em: 2, etapa: 'roteiro', nota: 'concluiu' });
+  const porBruto = f('b', 'concluido');
+  const r = Object.fromEntries(resumoDasSalas(salas, [porIdeia, porBruto]).map(x => [x.chave, x]));
+  assert.equal(r.pesquisa.contador, 1); assert.equal(r.roteiro.contador, 1);
+  assert.equal(r.edicao.contador, 1); // só o b passou pela edição
+  assert.equal(r.roteiro.estado, 'ocioso'); // aguardando-gravacao é da "gravação", não do Roteiro
 });
