@@ -31,7 +31,7 @@ O instalador confere tudo, prepara a Oficina e instala no seu Claude Code o coma
 ## Primeiro uso
 
 1. No Claude Code, digite `/oficina-de-conteudo`. A Oficina abre no navegador (endereço `http://localhost:4540`).
-2. Clique em **Já gravei** ou solte o vídeo bruto na tela.
+2. Escolha como começar: clique em **Tenho uma ideia** (a Pesquisa traz referências e o Roteiro escreve o texto pra você gravar) ou em **Já gravei** / solte o vídeo bruto na tela (ele vai direto pra Edição).
 3. Quando a Oficina pedir, escolha o **formato** e o **estilo** do vídeo.
 4. Assista o resultado no Studio (a janela onde você assiste e revisa o vídeo). Se gostou, aprove. Se não, peça ajustes.
 5. Aprove a legenda, copie o texto e baixe o vídeo.
