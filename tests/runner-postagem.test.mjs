@@ -81,3 +81,8 @@ test('rodarPostagem sends the previous post when the owner asked for a change, w
   assert.ok(prompt.includes('## Versão anterior') && prompt.includes('Antiga') && prompt.includes('#a'));
   assert.ok(!('CLAUDECODE' in visto.env));
 });
+
+test('montarPrompt carries past adjustments of the Postagem', () => {
+  const p = montarPrompt({ resumo: 'r', perfil: null, revisao: null, aprendizados: '- 2026-11-01: sem emoji', agora: AGORA });
+  assert.ok(p.includes('sem emoji'));
+});
