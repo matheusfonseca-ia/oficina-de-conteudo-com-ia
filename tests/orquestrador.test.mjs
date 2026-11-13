@@ -69,11 +69,15 @@ test('retomar after a restart picks up fichas left in a work etapa', async () =>
 test('andamento exposes the live estado.json of the running edição', async () => {
   let liberar; const segura = new Promise(r => { liberar = r; });
   const { store, o, nova } = montar({ edicao: async ({ pastaVideo }) => {
+    // A Máquina nunca escreve no mesmo milissegundo em que o trabalho começa; o mtime do arquivo tem
+    // resolução de ~1 ms e pode cair um pouco antes do Date.now() do início, o que fazia o teste falhar às vezes.
+    await new Promise(r => setTimeout(r, 10));
     fs.mkdirSync(path.join(pastaVideo, 'edit'), { recursive: true });
     fs.writeFileSync(path.join(pastaVideo, 'edit', 'estado.json'), JSON.stringify({ etapa: 'montando', progresso: 0.5, mensagem: 'Cortando' }));
     await segura; return { estado: { etapa: 'aguardando-escolhas' }, sessao: 'S' };
   } });
-  nova('a'); o.acordar(); await new Promise(r => setTimeout(r, 20));
+  nova('a'); o.acordar();
+  for (let i = 0; i < 200 && !o.andamento('a'); i++) await new Promise(r => setTimeout(r, 10)); // espera a condição, não um tempo fixo
   assert.equal(o.ocupado('a'), true); assert.deepEqual(o.andamento('a'), { progresso: 0.5, mensagem: 'Cortando' });
   liberar(); await o.esperarOcioso(); assert.equal(o.andamento('a'), null);
 });
