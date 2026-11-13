@@ -4,14 +4,14 @@ Uma oficina que roda no seu computador: seis salas com agentes de IA que levam o
 
 ## As seis salas
 
-1. **Pesquisa** (em breve)
-2. **Roteiro** (em breve)
+1. **Pesquisa** (funciona): acha na web vídeos que já funcionaram sobre a sua ideia e explica por quê
+2. **Roteiro** (funciona): escreve o roteiro no seu tom de voz pra você gravar lendo
 3. **Edição** (funciona): edita o vídeo com a Máquina de Edição
 4. **Capa** (em breve)
 5. **Postagem** (funciona, de forma semiautomática): escreve a legenda e deixa tudo pronto pra você copiar
 6. **Análise** (em breve)
 
-Nesta versão você grava o vídeo, joga na Oficina, escolhe o formato e o estilo, assiste o resultado, aprova, e recebe a legenda pronta pra copiar junto com o vídeo pra baixar. As salas marcadas "em breve" aparecem na cena, mas ainda não trabalham.
+Você pode começar de dois jeitos. **Tenho uma ideia**: a Pesquisa traz referências, você escolhe uma, o Roteiro escreve o texto, você aprova, grava lendo e manda a gravação pelo próprio cartão. **Já gravei**: você joga o vídeo e ele vai direto pra Edição. Nos dois casos, você escolhe o formato e o estilo, aprova o vídeo e recebe a legenda pronta. Capa e Análise aparecem na cena, mas ainda não trabalham.
 
 ## O que você precisa antes
 
@@ -44,13 +44,7 @@ Tudo fica na pasta `~/.oficina-de-conteudo` (na pasta do seu usuário), fora des
 
 ## Conte pra Oficina quem você é
 
-Crie o arquivo `~/.oficina-de-conteudo/cerebro/perfil.md` e escreva, em texto simples:
-
-- o seu **nicho** (sobre o que você fala)
-- o seu **público** (pra quem você fala)
-- o seu **tom de voz** (como você fala: direto, brincalhão, sério...)
-
-A sala de Postagem usa isso pra escrever a legenda com a sua cara. Sem o arquivo, ela usa um tom direto e casual.
+Na primeira vez que você abre a Oficina, ela pergunta o seu nicho, o seu público, o seu tom de voz, o @ do seu perfil e até 3 vídeos que você admira. Pesquisa, Roteiro e Postagem usam isso. Pra mudar depois, clique em **Cérebro**, lá em cima. Cada vez que você pede um ajuste na Pesquisa, no Roteiro ou na legenda, a Oficina anota e leva em conta nos próximos vídeos (fica em `~/.oficina-de-conteudo/cerebro/aprendizados/`).
 
 ## Atualizar
 
@@ -58,4 +52,4 @@ Se você baixou com git, dentro da pasta rode `git pull` e depois o instalador d
 
 ## O que vem nas próximas versões
 
-Roteiro, Pesquisa, Capa, publicação automática pelo Post for Me e Análise.
+Capa, publicação automática pelo Post for Me, pesquisa completa com Apify e Análise.
