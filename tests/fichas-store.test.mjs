@@ -66,3 +66,16 @@ test('novoIdDeTexto: slug of the whole text (dots included), unique on collision
   assert.equal(s.novoIdDeTexto('Como usar o n8n v1.2', DIA), '2026-11-05-como-usar-o-n8n-v1-2-2');
   assert.equal(s.novoIdDeTexto('!!!', DIA), '2026-11-05-video');
 });
+
+test('novoIdDeTexto: a slug cut at 50 chars never ends in a hyphen (id stays valid)', () => {
+  const s = new FichasStore(tmp()); s.garantirPastas();
+  const id = s.novoIdDeTexto('a'.repeat(49) + ' bc', DIA);
+  assert.match(id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  assert.doesNotThrow(() => s.pasta(id));
+  assert.equal(id, '2026-11-05-' + 'a'.repeat(49));
+});
+
+test('novoIdDeTexto: accents are folded into the slug', () => {
+  const s = new FichasStore(tmp()); s.garantirPastas();
+  assert.equal(s.novoIdDeTexto('Ação rápida do coração', DIA), '2026-11-05-acao-rapida-do-coracao');
+});
