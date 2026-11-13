@@ -83,10 +83,12 @@ await page.waitForFunction(() => window.ESC.ultimoEstado.videos.some(v => v.tema
 const ideia = await page.evaluate(() => window.ESC.ultimoEstado.videos.find(v => v.tema === 'IA no atendimento').id);
 await page.waitForSelector(`.ficha[data-id="${ideia}"] [data-acao="referencia"]`, { timeout: 10000 });
 ok(await page.locator(`.ficha[data-id="${ideia}"] .refs li`).count() === 2, 'referências aparecem pra escolher');
+await page.fill(`.ficha[data-id="${ideia}"] textarea[data-campo="revisao"]`, 'rascunho da escolha de referência');
 await page.click(`.ficha[data-id="${ideia}"] [data-acao="referencia"][data-indice="0"]`);
 await page.waitForFunction(i => window.ESC.ultimoEstado.videos.find(v => v.id === i)?.etapa === 'aprovacao-roteiro', ideia, { timeout: 15000 });
 await page.waitForSelector(`.ficha[data-id="${ideia}"] [data-acao="aprovar"]`, { timeout: 10000 });
 ok((await page.locator(`.ficha[data-id="${ideia}"]`).innerText()).includes('Gancho de teste'), 'roteiro aparece pra aprovar');
+ok(await page.locator(`.ficha[data-id="${ideia}"] textarea[data-campo="revisao"]`).inputValue() === '', 'rascunho da escolha de referência não vaza pro campo do roteiro');
 await page.click(`.ficha[data-id="${ideia}"] [data-acao="aprovar"]`);
 await page.waitForSelector(`.ficha[data-id="${ideia}"] [data-acao="ler"]`, { timeout: 15000 });
 await page.click(`.ficha[data-id="${ideia}"] [data-acao="ler"]`);

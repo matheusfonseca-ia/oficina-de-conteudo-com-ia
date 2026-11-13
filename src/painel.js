@@ -142,7 +142,7 @@ async function agir(btn) {
     else if (acao === 'pular-pesquisa') await api.post(base + '/evento', { tipo: 'pular', sala: 'pesquisa' });
     else if (acao === 'ler') abrirLeitura(v.roteiro);
     else if (acao === 'copiar') { await navigator.clipboard.writeText(`${v.postagem?.legenda ?? ""}\n\n${(v.postagem?.hashtags || []).join(' ')}`); btn.textContent = 'Copiada!'; }
-    if (acao === 'revisar' || acao === 'aprovar') rascunhos.delete(id);
+    if (acao === 'revisar' || acao === 'aprovar' || acao === 'referencia' || acao === 'sem-referencia') rascunhos.delete(id);
     if (acao === 'aprovar' && window.Notification?.permission === 'default') Notification.requestPermission();
   } catch (e) { alert(e.message); }
   finally { btn.disabled = false; document.activeElement?.blur(); }
