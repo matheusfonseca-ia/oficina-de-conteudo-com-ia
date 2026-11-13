@@ -57,3 +57,12 @@ test('salvar retries a rename blocked for a moment (EPERM/EBUSY/EACCES) and give
     assert.equal(chamadas, 1); // outros erros não são repetidos
   } finally { fs.renameSync = original; }
 });
+
+test('novoIdDeTexto: slug of the whole text (dots included), unique on collision', () => {
+  const s = new FichasStore(tmp()); s.garantirPastas();
+  const a = s.novoIdDeTexto('Como usar o n8n v1.2', DIA);
+  assert.equal(a, '2026-11-05-como-usar-o-n8n-v1-2');
+  fs.mkdirSync(s.pasta(a));
+  assert.equal(s.novoIdDeTexto('Como usar o n8n v1.2', DIA), '2026-11-05-como-usar-o-n8n-v1-2-2');
+  assert.equal(s.novoIdDeTexto('!!!', DIA), '2026-11-05-video');
+});
