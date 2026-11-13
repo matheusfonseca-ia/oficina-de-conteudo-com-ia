@@ -276,15 +276,15 @@ test('conexões: conectar o Higgsfield testa a chave e o estado nunca mostra a c
   const antes = process.env.OFC_HIGGSFIELD_URL; process.env.OFC_HIGGSFIELD_URL = hf.base;
   t.after(() => { if (antes === undefined) delete process.env.OFC_HIGGSFIELD_URL; else process.env.OFC_HIGGSFIELD_URL = antes; });
   const { post, estado, base } = await subir(t);
-  assert.deepEqual((await estado()).conexoes, { higgsfield: false });
+  assert.deepEqual((await estado()).conexoes, { higgsfield: false, postForMe: false });
   const errada = await post('/api/conexoes', { servico: 'higgsfield', chave: 'x:y' });
   assert.equal(errada.status, 400); assert.match((await errada.json()).erro, /não funcionou/);
   const certa = await post('/api/conexoes', { servico: 'higgsfield', chave: CHAVE_CERTA });
-  assert.equal(certa.status, 200); assert.deepEqual((await certa.json()).conexoes, { higgsfield: true });
+  assert.equal(certa.status, 200); assert.deepEqual((await certa.json()).conexoes, { higgsfield: true, postForMe: false });
   const e = await (await fetch(base + '/api/estado')).text();
   assert.ok(e.includes('"higgsfield":true') && !e.includes(CHAVE_CERTA));
   assert.equal((await post('/api/conexoes', { servico: 'outro', chave: 'a:b' })).status, 400);
   assert.equal((await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE' })).status >= 400, true, 'sem x-oficina é recusado');
   const sai = await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE', headers: { 'x-oficina': '1' } });
-  assert.deepEqual((await sai.json()).conexoes, { higgsfield: false });
+  assert.deepEqual((await sai.json()).conexoes, { higgsfield: false, postForMe: false });
 });
