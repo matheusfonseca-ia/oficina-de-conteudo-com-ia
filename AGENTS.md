@@ -2,7 +2,7 @@
 
 Nome comercial: **Oficina de Conteúdo com IA** (antes "Escritório de Conteúdo", trocado em 12/11/2026). Produto separado da Máquina de Edição, vendido como upsell dela (R$ 147, downsell R$ 97). Não confundir com a **Oficina de Agentes** (`projetos/agents-office/`), outro produto, de onde vem o visual 3D.
 
-App local em Node (sem framework de servidor) + cena 3D (three, bundle único em `dist/oficina.html` via `build.mjs`). Upsell da Máquina de Edição: seis salas de agentes. Etapa 2 ativa: Pesquisa (web), Roteiro, Edição e Postagem semiautomática; Cérebro com entrevista e aprendizados. O aluno roda no próprio PC com Claude Code.
+App local em Node (sem framework de servidor) + cena 3D (three, bundle único em `dist/oficina.html` via `build.mjs`). Upsell da Máquina de Edição: seis salas de agentes. Etapa 3 ativa: Pesquisa (web), Roteiro, Edição, Capa e Postagem semiautomática; Cérebro com entrevista e aprendizados; conexão do Higgsfield. O aluno roda no próprio PC com Claude Code.
 
 ## Arquitetura
 - **A ficha é a fonte de verdade.** Cada vídeo tem uma ficha (`lib/ficha.mjs`, guardada por `lib/fichas-store.mjs` em `~/.oficina-de-conteudo`). A cena, o painel e os runners só leem/escrevem a ficha. Estado vive nela, nunca em variável solta.
@@ -12,12 +12,15 @@ App local em Node (sem framework de servidor) + cena 3D (three, bundle único em
 - **Fechamento:** `app.fechar()` chama `orquestrador.pararTudo()`, que aborta cada trabalho (um `AbortController` por ficha, repassado aos runners) e espera o Claude filho morrer. Trabalho abortado assim não marca erro: a ficha fica na etapa de trabalho e o `retomar()` da próxima abertura continua.
 - **Claude filho:** os runners rodam com `--settings '{"disableAllHooks":true}'` e sem `CLAUDECODE` no ambiente (`ambienteFilho()` em `lib/runner-edicao.mjs`). No Windows só o `claude.exe` do instalador oficial funciona (o servidor chama sem shell); a checagem e o `instalar.ps1` conferem isso.
 - **Salas sem terminal:** Pesquisa (só `WebSearch,WebFetch`), Roteiro e Postagem rodam pelo `lib/runner-sala.mjs` (um `claude -p` sem sessão, sem MCP, sem hooks, resposta em JSON validada no runner de cada sala). O Cérebro (`lib/cerebro.mjs`) é um formulário, sem Claude; os ajustes pedidos viram linhas em `cerebro/aprendizados/<sala>.md` (`lib/aprendizados.mjs`).
+- **Capa:** `lib/runner-capa.mjs`. O servidor tira 12 frames do `edit/final.mp4` (`lib/capa-frames.mjs`, FFmpeg), o Claude roda só com `Read` pra escolher o frame e escrever 2 a 3 títulos, e o servidor monta o PNG (`lib/capa-modelo.mjs`: HTML com as cores do estilo da Edição, gerado pelo Chrome/Edge do aluno via `playwright-core`, que é dependência de runtime). Sem navegador, a capa sai vazia com aviso e o vídeo segue. "Refazer capa" volta pra `capa` com `capa.refazendo` e depois direto pra aprovação do post, sem reescrever a legenda.
+- **Conexões:** as chaves do aluno ficam em `<dados>/config.json` e só o servidor lê (`lib/conexoes.mjs`); a página só recebe `{ higgsfield: true|false }` em `/api/estado`. O Higgsfield (`lib/higgsfield.mjs`) gera a opção de capa com IA; falha dele vira aviso, nunca trava o vídeo. Testes usam o Higgsfield falso (`tests/fixtures/higgsfield-falso.mjs`, `OFC_HIGGSFIELD_URL`) e `OFC_TEST_MP4` pra Capa de verdade na fumaça.
 - **Pacote de vídeo:** `src/movimentos.js` guarda a função pura que decide os movimentos do pacote; `src/pacote.js` a usa. Não há anel: o pacote sai pela passarela da sala, passa pelo Cérebro e entra pela passarela da próxima.
 - **Cena = Oficina de Agentes, só no modo escuro.** Câmera, visão geral, zoom (roda, botões, teclas), arrastar, foco numa sala (voo com arco, as outras escurecem, vinheta), cartões das salas e nomes dos robôs vêm do `src/main.js` da Oficina de Agentes, com as mesmas funções e números. O centro é próprio (`src/chefe.js`): ilha redonda, domo de rede neural e a mesa do chefe virada pra câmera. A Oficina de Conteúdo não tem modo claro: `setDark()` roda na abertura e o `shell.html` só tem os tokens escuros.
 
 ## Regras
 - Todo texto que o aluno vê é pt-BR, simples, sem jargão.
-- Só a sala de EDIÇÃO tem terminal (Bash). As outras salas rodam o Claude sem ferramentas de terminal. A Pesquisa tem só busca e leitura de páginas da web.
+- Só a sala de EDIÇÃO tem terminal (Bash). As outras salas rodam o Claude sem ferramentas de terminal. A Pesquisa tem só busca e leitura de páginas da web; a Capa só lê arquivos (`Read`).
+- A página nunca recebe uma chave de serviço (Higgsfield, Post for Me): só se está conectada.
 - Nenhum teste chama o Claude de verdade: use runners falsos (`runners`, `OFC_CLAUDE_COMMAND`, `OFC_CLAUDE_PREFIX_ARGS`).
 - `src/builders.js`, `src/leds.js`, `lib/claude-runner.mjs` e `lib/execution.mjs` são **cópias literais** de `projetos/agents-office` (Oficina de Agentes). Correção feita lá precisa ser copiada aqui à mão, e vice-versa. Não editar só aqui.
 - Dados do aluno ficam fora do repo (`OFC_DATA`, padrão `~/.oficina-de-conteudo`). Nunca gravar dados dentro da pasta do repo.

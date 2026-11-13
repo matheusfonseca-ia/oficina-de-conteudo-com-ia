@@ -1,6 +1,6 @@
 // Test fixture: stands in for `claude`. Never touches the network.
 // Edição: reads the /oficina-de-conteudo-motor command and writes edit/estado.json in cwd.
-// Postagem, Pesquisa e Roteiro: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO override).
+// Capa, Postagem, Pesquisa e Roteiro: answer by the room named in the prompt (OFC_TEST_POSTAGEM / _PESQUISA / _ROTEIRO override).
 import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
@@ -23,10 +23,14 @@ if (modo === 'lento') { /* sem resposta */ } else if (cmd) {
   else if (modo !== 'sem-estado') fs.writeFileSync(path.join(edit, 'estado.json'), JSON.stringify(estado));
   if (cmd === 'PREPARAR') fs.writeFileSync(path.join(edit, 'painel-contexto.json'), '{}');
   // sem-mp4 / sem-resumo: a exportação diz "exportado" mas não deixa o arquivo.
-  if (cmd === 'EXPORTAR' && modo !== 'sem-mp4') fs.writeFileSync(path.join(edit, 'final.mp4'), 'mp4');
+  // OFC_TEST_MP4: a real video for the cover room (the smoke test makes one with FFmpeg).
+  if (cmd === 'EXPORTAR' && modo !== 'sem-mp4') { if (process.env.OFC_TEST_MP4) fs.copyFileSync(process.env.OFC_TEST_MP4, path.join(edit, 'final.mp4')); else fs.writeFileSync(path.join(edit, 'final.mp4'), 'mp4'); }
   if (cmd === 'EXPORTAR' && modo !== 'sem-resumo') fs.writeFileSync(path.join(edit, 'resumo.md'), '# Resumo do vídeo\nTema: teste');
   // sem-resultado-feito: gravou o estado certo e saiu sem a mensagem final.
   if (modo !== 'sem-resultado-feito') emit({ type: 'result', subtype: 'success', result: 'feito' });
+} else if (/sala de CAPA/.test(prompt)) {
+  const texto = process.env.OFC_TEST_CAPA ?? JSON.stringify({ frame: 2, titulos: ['Título de teste um', 'Título dois'], promptIA: 'a person talking' });
+  emit({ type: 'result', subtype: 'success', result: texto });
 } else if (/sala de PESQUISA/.test(prompt)) {
   const texto = process.env.OFC_TEST_PESQUISA ?? JSON.stringify({ referencias: [
     { titulo: 'Referência de teste 1', url: 'https://example.com/r1', plataforma: 'instagram', criador: '@teste', porQueFuncionou: 'Gancho com número logo no começo.', gancho: '3 erros que...' },

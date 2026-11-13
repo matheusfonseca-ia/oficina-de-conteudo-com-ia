@@ -197,3 +197,22 @@ test('revisar records the adjustment for pesquisa, roteiro and postagem, never f
   o.evento('e', { tipo: 'revisar', texto: 'legenda maior' }); await o.esperarOcioso();
   assert.equal(fs.existsSync(path.join(store.cerebroDir, 'aprendizados', 'edicao.md')), false);
 });
+
+const CAPA_FALSA = { opcoes: [{ arquivo: 'capa/capa-1.png', titulo: 'Um', origem: 'fabrica' }, { arquivo: 'capa/capa-2.png', titulo: 'Dois', origem: 'fabrica' }], escolhida: 0, aviso: null };
+
+test('capa roda depois da exportação; refazer capa roda só a capa e ensina a sala', async () => {
+  let capas = 0, posts = 0;
+  const { store, o, nova } = montar({
+    edicao: async () => ({ estado: { etapa: 'exportado' }, sessao: 'S1' }),
+    capa: async ({ ficha }) => { capas++; return { ...CAPA_FALSA, aviso: ficha.revisao ? 'refeita' : null }; },
+    postagem: async () => { posts++; return { legenda: 'L', hashtags: [], horario: '2099-01-01T21:00:00.000Z', motivoHorario: '' }; },
+  });
+  const f0 = nova('a', 'exportando'); store.salvar({ ...f0, pular: ['pesquisa', 'roteiro', 'analise'] });
+  o.acordar(); await o.esperarOcioso();
+  let f = store.carregar('a');
+  assert.equal(f.etapa, 'aprovacao-pacote'); assert.equal(f.capa.opcoes.length, 2); assert.equal(capas, 1); assert.equal(posts, 1);
+  o.evento('a', { tipo: 'revisar', sala: 'capa', texto: 'mais contraste' }); await o.esperarOcioso();
+  f = store.carregar('a');
+  assert.equal(f.etapa, 'aprovacao-pacote'); assert.equal(f.capa.aviso, 'refeita'); assert.equal(capas, 2); assert.equal(posts, 1);
+  assert.match(lerAprendizados(store.cerebroDir, 'capa'), /mais contraste/);
+});

@@ -7,12 +7,12 @@ import { validarPerfil, salvarPerfil, lerCerebro } from '../lib/cerebro.mjs';
 import { registrarAprendizado, lerAprendizados } from '../lib/aprendizados.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ofc-cer-'));
-const BOM = { nicho: ' IA pra pequenos negócios ', publico: 'donos de loja', tom: 'direto e brincalhão', arroba: 'matheus.ia', referencias: ['https://instagram.com/reel/1', '', '  '] };
+const BOM = { nicho: ' IA pra pequenos negócios ', publico: 'donos de loja', tom: 'direto e brincalhão', arroba: 'matheus.ia', referencias: ['https://instagram.com/perfil1', 'perfil.dois', '', '  '] };
 
 test('validarPerfil trims, adds the @ and drops empty links', () => {
   const p = validarPerfil(BOM);
   assert.equal(p.nicho, 'IA pra pequenos negócios'); assert.equal(p.arroba, '@matheus.ia');
-  assert.deepEqual(p.referencias, ['https://instagram.com/reel/1']);
+  assert.deepEqual(p.referencias, ['https://instagram.com/perfil1', '@perfil.dois']);
   assert.equal(validarPerfil({ ...BOM, arroba: '' }).arroba, '');
 });
 
@@ -22,7 +22,7 @@ test('validarPerfil refuses missing answers, bad @, bad links and too many links
   assert.throws(() => validarPerfil({ ...BOM, tom: '' }), /tom de voz/);
   assert.throws(() => validarPerfil({ ...BOM, tom: 'x'.repeat(601) }), /até 600 caracteres/);
   assert.throws(() => validarPerfil({ ...BOM, arroba: 'meu perfil!' }), /@ do perfil/);
-  assert.throws(() => validarPerfil({ ...BOM, referencias: ['instagram.com/x'] }), /links/);
+  assert.throws(() => validarPerfil({ ...BOM, referencias: ['instagram.com/x'] }), /perfis que você admira/);
   assert.throws(() => validarPerfil({ ...BOM, referencias: ['https://a', 'https://b', 'https://c', 'https://d'] }), /No máximo 3/);
 });
 
@@ -33,7 +33,7 @@ test('salvarPerfil writes perfil.json and perfil.md; lerCerebro reads them back'
   const c = lerCerebro(d);
   assert.equal(c.preenchido, true); assert.equal(c.perfil.publico, 'donos de loja');
   assert.match(c.texto, /## Tom de voz\ndireto e brincalhão/);
-  assert.match(c.texto, /- https:\/\/instagram\.com\/reel\/1/);
+  assert.match(c.texto, /## Perfis que eu admiro\n- https:\/\/instagram\.com\/perfil1\n- @perfil\.dois/);
 });
 
 test('a hand-written perfil.md counts as filled and is kept in perfil-antigo.md, only once', () => {

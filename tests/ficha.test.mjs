@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criarFicha, aplicar, ETAPAS, SEQUENCIA, salaDaEtapa, emTrabalho } from '../lib/ficha.mjs';
+import { criarFicha, aplicar, ETAPAS, SEQUENCIA, salaDaEtapa, emTrabalho, salaDoAjuste } from '../lib/ficha.mjs';
 
 const ETAPA1 = ['pesquisa', 'roteiro', 'capa', 'analise'];
 const novo = (extra = {}) => criarFicha({ id: 'v1', porta: 'bruto', bruto: 'bruto.mp4', pular: ETAPA1, agora: 1, ...extra });
@@ -136,4 +136,52 @@ test('pular pesquisa while it failed goes straight to roteiro without a referenc
   let f = aplicar(ideia(), { tipo: 'falhou', mensagem: 'sem referências' });
   f = aplicar(f, { tipo: 'pular', sala: 'pesquisa' });
   assert.equal(f.etapa, 'roteiro'); assert.equal(f.erro, null); assert.equal(f.referencia, null);
+});
+
+// ---------- Etapa 3: sala de Capa ----------
+const CAPA = { opcoes: [{ arquivo: 'capa/capa-1.png', titulo: 'Um', origem: 'fabrica' }, { arquivo: 'capa/capa-2.png', titulo: 'Dois', origem: 'fabrica' }], escolhida: 0, aviso: null };
+const POST = { legenda: 'L', hashtags: ['#a'], horario: '2099-01-01T21:00:00.000Z', motivoHorario: 'x' };
+const comCapa = (extra = {}) => ({ ...criarFicha({ id: 'c1', porta: 'bruto', bruto: 'bruto.mp4', pular: ['pesquisa', 'roteiro', 'analise'], agora: 1 }), ...extra });
+
+test('criarFicha starts with capa null', () => { assert.equal(novo().capa, null); });
+
+test('concluiu na capa grava a capa e vai pra postagem', () => {
+  const f = aplicar(comCapa({ etapa: 'capa' }), { tipo: 'concluiu', dados: { capa: CAPA } });
+  assert.equal(f.etapa, 'postagem'); assert.equal(f.capa.opcoes.length, 2); assert.equal(f.capa.escolhida, 0);
+});
+
+test('escolheu-capa troca a escolhida na aprovação do post', () => {
+  const f = aplicar(comCapa({ etapa: 'aprovacao-pacote', capa: CAPA, postagem: POST }), { tipo: 'escolheu-capa', indice: 1 });
+  assert.equal(f.capa.escolhida, 1); assert.equal(f.etapa, 'aprovacao-pacote');
+});
+
+test('escolheu-capa recusa índice inválido ou fora da aprovação', () => {
+  const f = comCapa({ etapa: 'aprovacao-pacote', capa: CAPA, postagem: POST });
+  for (const indice of [9, -1, '0', 1.5, undefined]) assert.throws(() => aplicar(f, { tipo: 'escolheu-capa', indice }), /Essa capa não existe/, String(indice));
+  assert.throws(() => aplicar({ ...f, etapa: 'postagem' }, { tipo: 'escolheu-capa', indice: 0 }), /não está esperando aprovação/);
+});
+
+test('refazer capa volta pra capa e depois direto pra aprovação', () => {
+  let f = aplicar(comCapa({ etapa: 'aprovacao-pacote', capa: CAPA, postagem: POST }), { tipo: 'revisar', sala: 'capa', texto: 'mais contraste' });
+  assert.equal(f.etapa, 'capa'); assert.equal(f.revisao, 'mais contraste'); assert.equal(f.capa.refazendo, true);
+  f = aplicar(f, { tipo: 'concluiu', dados: { capa: { ...CAPA, escolhida: 0 } } });
+  assert.equal(f.etapa, 'aprovacao-pacote'); assert.equal(f.capa.refazendo, undefined); assert.deepEqual(f.postagem, POST); assert.equal(f.revisao, null);
+});
+
+test('revisar sem sala na aprovação do post continua refazendo a legenda', () => {
+  const f = aplicar(comCapa({ etapa: 'aprovacao-pacote', capa: CAPA, postagem: POST }), { tipo: 'revisar', texto: 'mais curta' });
+  assert.equal(f.etapa, 'postagem');
+});
+
+test('salaDoAjuste aponta a sala que aprende com o ajuste', () => {
+  const f = comCapa({ etapa: 'aprovacao-pacote' });
+  assert.equal(salaDoAjuste(f, { tipo: 'revisar', sala: 'capa' }), 'capa');
+  assert.equal(salaDoAjuste(f, { tipo: 'revisar' }), 'postagem');
+  assert.equal(salaDoAjuste({ ...f, etapa: 'aprovacao-roteiro' }, { tipo: 'revisar' }), 'roteiro');
+});
+
+test('pular a Capa no meio do Refazer capa volta pra aprovação sem reescrever a legenda', () => {
+  let f = aplicar(comCapa({ etapa: 'aprovacao-pacote', capa: CAPA, postagem: POST }), { tipo: 'revisar', sala: 'capa', texto: 'mais contraste' });
+  f = aplicar(f, { tipo: 'pular', sala: 'capa' });
+  assert.equal(f.etapa, 'aprovacao-pacote'); assert.equal(f.revisao, null); assert.equal(f.capa.refazendo, undefined); assert.deepEqual(f.postagem, POST);
 });

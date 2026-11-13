@@ -17,6 +17,10 @@ Push-Location $pasta
 try {
   npm install --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'npm install falhou' }
   node build.mjs; if ($LASTEXITCODE -ne 0) { throw 'build falhou' }
+  # A Edição usa o HyperFrames pelo npx. A Máquina só baixa ele na primeira edição; a Oficina baixa aqui,
+  # senão a checagem (que não instala nada) acusa que falta.
+  Write-Host 'Baixando o HyperFrames (só demora na primeira vez)...'
+  npx --yes hyperframes --version | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Não deu pra baixar o HyperFrames. Confira a internet e rode o instalador de novo.' }
   New-Item -ItemType Directory -Force $dados | Out-Null
   $versao = node -p "require('./package.json').version"
   $json = @{ pasta = $pasta; versao = $versao } | ConvertTo-Json

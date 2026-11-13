@@ -18,6 +18,22 @@ export function aplicarEstado(ESC, estado, pacotes) {
   for (const m of calcularMovimentos(ultimaSala, estado.videos, salaDaEtapa, Object.keys(ESC.salas))) pacotes.aoMudar(m.id, m.de, m.para);
   const antena = ESC.salas.postagem?.decor?.getObjectByName('antena');
   if (antena) antena.material.emissiveIntensity = estado.videos.some(v => v.etapa === 'pronto-pra-postar') ? 1.6 : 0.2;
+  // A new cover: the Capa printer pushes its paper up and back.
+  const capas = estado.salas.find(s => s.chave === 'capa')?.contador ?? 0;
+  if (ultimasCapas !== null && capas > ultimasCapas) imprimir(ESC.salas.capa?.decor?.getObjectByName('papel'));
+  ultimasCapas = capas;
+}
+let ultimasCapas = null;
+function imprimir(papel) {
+  if (!papel || papel.userData.imprimindo) return;
+  papel.userData.imprimindo = true;
+  const y0 = papel.position.y, ini = performance.now();
+  const passo = agora => {
+    const t = Math.min(1, (agora - ini) / 800);
+    papel.position.y = y0 + 0.6 * Math.sin(Math.PI * t);
+    if (t < 1) requestAnimationFrame(passo); else { papel.position.y = y0; papel.userData.imprimindo = false; }
+  };
+  requestAnimationFrame(passo);
 }
 
 
@@ -46,6 +62,19 @@ function referencias(v) {
     <div class="acoes"><button data-acao="revisar">Buscar outras</button><button data-acao="sem-referencia">Seguir sem referência</button></div>`;
 }
 
+const urlCapa = (v, o) => `/api/videos/${encodeURIComponent(v.id)}/capa/${encodeURIComponent(o.arquivo.split('/').pop())}?v=${v.atualizadaEm}`;
+// The covers side by side on the post approval: click one to choose it.
+function capas(v) {
+  const c = v.capa; if (!c) return '';
+  const lista = (c.opcoes || []).map((o, i) => `<button data-acao="escolher-capa" data-indice="${i}" class="${i === c.escolhida ? 'escolhida' : ''}" title="${esc(o.titulo)}">
+    <img src="${urlCapa(v, o)}" alt="${esc(o.titulo)}">${i === c.escolhida ? '<span class="selo">Escolhida</span>' : ''}${o.origem === 'higgsfield' ? '<span class="selo ia">IA</span>' : ''}</button>`).join('');
+  return (lista ? `<div class="capas">${lista}</div>` : '') + (c.aviso ? `<div class="aviso-capa">${esc(c.aviso)}</div>` : '');
+}
+function baixarCapa(v) {
+  const o = v.capa?.opcoes?.[v.capa.escolhida];
+  return o ? `<a class="botao" download href="${urlCapa(v, o)}">Baixar capa</a>` : '';
+}
+
 function cartao(v) {
   const meta = ETAPAS[v.etapa];
   let corpo = `<h3>${esc(v.tema || v.id)}</h3>${trilha(v)}<div class="etapa">${esc(v.andamento?.mensagem || meta.texto)}</div>`;
@@ -70,11 +99,11 @@ function cartao(v) {
       const p = v.postagem;
       if (p) corpo += `<div class="legenda">${esc(p.legenda)}\n\n${esc((p.hashtags || []).join(' '))}</div><div class="etapa">Sugestão: ${esc(horaTexto(p.horario))}${p.motivoHorario ? ' · ' + esc(p.motivoHorario) : ''}</div>`;
     }
-    if (v.etapa === 'aprovacao-pacote') corpo += `<textarea data-campo="revisao" placeholder="O que mudar na legenda?"></textarea>
-      <div class="acoes">${baixar}${copiar}<button data-acao="revisar">Pedir ajuste</button><button class="forte" data-acao="aprovar">Aprovar</button></div>`;
+    if (v.etapa === 'aprovacao-pacote') corpo += `${capas(v)}<textarea data-campo="revisao" placeholder="O que mudar na legenda ou na capa?"></textarea>
+      <div class="acoes">${baixar}${copiar}<button data-acao="revisar">Pedir ajuste</button>${v.pular.includes('capa') ? '' : '<button data-acao="refazer-capa">Refazer capa</button>'}<button class="forte" data-acao="aprovar">Aprovar</button></div>`;
     if (v.etapa === 'pronto-pra-postar') {
       const hora = v.postagem && new Date(v.postagem.horario) <= new Date();
-      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes">${baixar}${copiar}<button class="forte" data-acao="postado">Já postei</button></div>`;
+      corpo += `${hora ? '<div class="erro" style="color:#A06A00">Hora de postar!</div>' : ''}<div class="acoes">${baixar}${baixarCapa(v)}${copiar}<button class="forte" data-acao="postado">Já postei</button></div>`;
     }
   }
   if (ORDEM.indexOf(salaDaEtapa(v.etapa)) < ORDEM.indexOf('postagem') && !v.pular.includes('postagem'))
@@ -133,6 +162,8 @@ async function agir(btn) {
     if (acao === 'painel') { const { url } = await api.post(base + '/painel'); abrirModal(url, id); }
     else if (acao === 'studio') await abrirStudio(btn, base);
     else if (acao === 'revisar') { const texto = ficha.querySelector('[data-campo="revisao"]').value.trim(); if (!texto) throw new Error('Escreva o que mudar.'); await api.post(base + '/evento', { tipo: 'revisar', texto }); }
+    else if (acao === 'refazer-capa') { const texto = ficha.querySelector('[data-campo="revisao"]').value.trim(); if (!texto) throw new Error('Escreva o que mudar na capa.'); await api.post(base + '/evento', { tipo: 'revisar', sala: 'capa', texto }); }
+    else if (acao === 'escolher-capa') await api.post(base + '/evento', { tipo: 'escolheu-capa', indice: Number(btn.dataset.indice) });
     else if (acao === 'aprovar') await api.post(base + '/evento', { tipo: 'aprovou' });
     else if (acao === 'postado') await api.post(base + '/evento', { tipo: 'postado' });
     else if (acao === 'tentar') await api.post(base + '/evento', { tipo: 'tentar-de-novo' });
@@ -142,7 +173,7 @@ async function agir(btn) {
     else if (acao === 'pular-pesquisa') await api.post(base + '/evento', { tipo: 'pular', sala: 'pesquisa' });
     else if (acao === 'ler') abrirLeitura(v.roteiro);
     else if (acao === 'copiar') { await navigator.clipboard.writeText(`${v.postagem?.legenda ?? ""}\n\n${(v.postagem?.hashtags || []).join(' ')}`); btn.textContent = 'Copiada!'; }
-    if (acao === 'revisar' || acao === 'aprovar' || acao === 'referencia' || acao === 'sem-referencia') rascunhos.delete(id);
+    if (acao === 'revisar' || acao === 'refazer-capa' || acao === 'aprovar' || acao === 'referencia' || acao === 'sem-referencia') rascunhos.delete(id);
     if (acao === 'aprovar' && window.Notification?.permission === 'default') Notification.requestPermission();
   } catch (e) { alert(e.message); }
   finally { btn.disabled = false; document.activeElement?.blur(); }
@@ -155,7 +186,10 @@ function fecharModal() { modalId = null; $('#modal').classList.remove('aberto');
 // Room cards: the Oficina's compact department badge (main.js places them, the same way as there).
 function criarPlacas(ESC) {
   for (const el of Object.values(ESC.placas))
-    el.addEventListener('click', ev => { if (ev.target.dataset.acao === 'checar') api.post('/api/checagem').catch(e => alert(e.message)); });
+    el.addEventListener('click', ev => {
+      if (ev.target.dataset.acao === 'checar') api.post('/api/checagem').catch(e => alert(e.message));
+      if (ev.target.dataset.acao === 'conectar') { ev.stopPropagation(); dispatchEvent(new CustomEvent('abrir-chefe', { detail: { aba: 'conexoes' } })); }
+    });
   return e => {
     for (const s of e.salas) {
       const el = ESC.placas[s.chave]; if (!el) continue;
@@ -166,9 +200,17 @@ function criarPlacas(ESC) {
         + (s.ativa ? `<div class="b-count"><span class="b-num">${s.fila}</span><span class="b-lab">${s.fila === 1 ? 'vídeo na sala' : 'vídeos na sala'}</span></div>` : '')
         + `<div class="b-metrics"><div class="m-row"><span class="m-lab b-status">${esc(s.texto)}</span></div>`
         + (s.ativa ? `<div class="m-row"><span class="m-lab">${esc(s.rotuloContador)}</span><span class="m-val">${s.contador}</span></div>` : '') + '</div>'
-        + (s.chave === 'edicao' && !e.checagem.ok ? '<button data-acao="checar">Conferir de novo</button>' : '');
+        + (s.chave === 'edicao' && !e.checagem.ok ? '<button data-acao="checar">Conferir de novo</button>' : '')
+        + (s.chave === 'capa' ? placaDaCapa(e) : '');
     }
   };
+}
+
+// Capa card: the last cover's warning, and a shortcut to connect the Higgsfield.
+function placaDaCapa(e) {
+  const ultima = [...e.videos].filter(v => v.capa).sort((a, b) => b.atualizadaEm - a.atualizadaEm)[0];
+  const aviso = ultima?.capa?.aviso ? `<div class="aviso-capa">${esc(ultima.capa.aviso)}</div>` : '';
+  return aviso + (e.conexoes && !e.conexoes.higgsfield ? '<button data-acao="conectar">Conectar Higgsfield</button>' : '');
 }
 
 async function comAviso(nome, fn) {

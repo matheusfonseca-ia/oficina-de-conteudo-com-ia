@@ -66,7 +66,7 @@ export function decorar(chave, cor) {
       const prancheta = rbox(3.6, 0.2, 2.6, '#F7F7F2', 0.1); prancheta.position.set(-6, 1.6, 3); prancheta.rotation.set(-0.5, Math.PI / 4, 0); g.add(prancheta);
       const cav = rbox(0.3, 0.3, 1.6, '#3A3A3E', 0.08); cav.position.set(-6, 0.12, 3); g.add(cav);
       const imp = rbox(2.4, 1.8, 1.2, '#E5E5E0', 0.15); imp.position.set(6, 0.12, 4); g.add(imp);
-      const papel = rbox(1.6, 1.2, 0.04, '#FFFFFF', 0.02); papel.position.set(6, 1.35, 4.6); g.add(papel);
+      const papel = rbox(1.6, 1.2, 0.04, '#FFFFFF', 0.02); papel.position.set(6, 1.35, 4.6); papel.name = 'papel'; g.add(papel); // prints a new cover (src/painel.js)
     },
     postagem() {
       const p = parede(g); quadro(p, 8, 4.8, '#26262A');

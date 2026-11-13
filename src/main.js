@@ -159,6 +159,28 @@ for (const k of ORDEM) {
 ilhas.cerebro.grupo.traverse(o => { if ((o.isMesh || o.isSprite) && !o.userData.dept) o.userData.dept = 'cerebro'; });
 const leds = initLeds({ scene, LAYOUT: Object.fromEntries(ORDEM.map(k => [k, LAYOUT[k]])), DEPTS }); // the round centre has its own ring
 
+/* ---------- keep each room's decor inside its island ----------
+   Every piece (a wall with what hangs on it, a plant, a shelf...) is measured in the island's frame;
+   one that pokes past the edge slides back in, and one wider than the island is centred on it. */
+const MARGEM_ILHA = 1;
+function encaixarNaIlha(decor, ilha) {
+  ilha.grupo.updateMatrixWorld(true);
+  const limX = ilha.L.w / 2 - MARGEM_ILHA, limZ = ilha.L.d / 2 - MARGEM_ILHA;
+  const c = ilha.grupo.position, caixa = new THREE.Box3();
+  const pecas = decor.children.flatMap(p => (p.userData.mobilia ? p.children : [p]));
+  const desvio = (lo, hi, lim) => (hi - lo > 2 * lim ? -(lo + hi) / 2 : lo < -lim ? -lim - lo : hi > lim ? lim - hi : 0);
+  for (const p of pecas) {
+    caixa.setFromObject(p);
+    if (caixa.isEmpty()) continue;
+    const dx = desvio(caixa.min.x - c.x, caixa.max.x - c.x, limX), dz = desvio(caixa.min.z - c.z, caixa.max.z - c.z, limZ);
+    if (!dx && !dz) continue;
+    const alvo = p.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(dx, 0, dz));
+    p.parent.worldToLocal(alvo);
+    p.position.copy(alvo);
+    p.updateMatrixWorld(true);
+  }
+}
+
 /* ---------- one desk + one robot per room (Oficina main.js 207–262, the lead's desk) ---------- */
 const ANG = Math.PI / 4;
 const rot = v => v.applyAxisAngle(new THREE.Vector3(0, 1, 0), ANG);
@@ -204,14 +226,20 @@ for (const k of ORDEM) {
 
   const decor = decorar(k, cor.chip);
   decor.scale.setScalar(ESCALA);
-  decor.add(mobiliar(k, cor.chip, { makePlant, makeServerRack }));
+  const mobilia = mobiliar(k, cor.chip, { makePlant, makeServerRack });
+  mobilia.userData.mobilia = true;
+  decor.add(mobilia);
   decor.traverse(o => { if (o.isMesh) o.userData.dept = k; });
   ilhas[k].grupo.add(decor);
+  encaixarNaIlha(decor, ilhas[k]);
 
   salas[k] = { grupo: ilhas[k].grupo, robo, tela, aviso, estacao: station, assento, pill, decor,
     pe: assento.clone().add(rot(new THREE.Vector3(1.5 * ESCALA, 0, 0.15 * ESCALA))),
     centro: new THREE.Vector3(L.pos[0], 0, L.pos[1]), estado: 'ocioso', bob: Math.random() * 10 };
 }
+
+// The boss runs the Cérebro (what the Oficina knows about you): clicking him opens that form (src/formularios.js).
+const abrirChefe = () => dispatchEvent(new CustomEvent('abrir-chefe'));
 
 /* ---------- the boss: one desk in the middle of the dome, facing the camera ---------- */
 const ESCALA_CHEFE = 1.75; // a bigger desk: the boss's island is the widest
@@ -231,12 +259,13 @@ const chefe = (() => {
   const assento = base.clone().add(new THREE.Vector3(0, 0, 1.7 * ESCALA_CHEFE).applyAxisAngle(new THREE.Vector3(0, 1, 0), ANG + Math.PI));
   robo.position.copy(assento);
   robo.rotation.y = ANG; // faces the camera
-  robo.traverse(o => { if (o.isMesh) { o.userData.dept = 'cerebro'; o.userData.sala = 'cerebro'; clickTargets.push(o); } });
+  robo.traverse(o => { if (o.isMesh) { o.userData.dept = 'cerebro'; o.userData.sala = 'cerebro'; o.userData.chefe = true; clickTargets.push(o); } });
   scene.add(robo);
   const pill = document.createElement('div');
   pill.className = 'pill';
   pill.innerHTML = '<span class="star">★</span>CHEFE';
-  pill.addEventListener('click', () => enterFocus('cerebro'));
+  pill.title = 'O que a Oficina sabe sobre você';
+  pill.addEventListener('click', () => { enterFocus('cerebro'); abrirChefe(); });
   hud.appendChild(pill);
   return { robo, pill, estado: 'ocioso', bob: Math.random() * 10 };
 })();
@@ -369,6 +398,7 @@ addEventListener('pointerup', (e) => {
   const hits = ray.intersectObjects(clickTargets, false);
   if (hits.length) {
     const k = hits[0].object.userData.sala;
+    if (hits[0].object.userData.chefe) abrirChefe();
       if (k && k !== focused) enterFocus(k);
   }
 });
@@ -504,7 +534,7 @@ function tickLOD() {
     if (k === 'postagem') top += 60 * badgeScale;
     // Stop at the viewport edge continuously; never jump to another free slot.
     const x = clamp(left, 8, Math.max(8, rightEdge - bw));
-    const y = clamp(top, 64, Math.max(64, innerHeight - bh - 12));
+    const y = clamp(top, 12, Math.max(12, innerHeight - bh - 12));
     d.el.style.transform = `translate(${x}px,${y}px) scale(${badgeScale})`;
     d.el.style.opacity = focused === k ? 1 : 1 - 0.75 * focusDim; // unfocused cards recede with the scene
   }

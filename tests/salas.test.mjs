@@ -7,11 +7,11 @@ import { carregarSalas, ORDEM_SALAS, salasInativas } from '../lib/salas.mjs';
 import { resumoDasSalas } from '../lib/resumo.mjs';
 import { criarFicha } from '../lib/ficha.mjs';
 
-test('salas.json: six rooms in clockwise order; etapa 2 adds pesquisa and roteiro', () => {
+test('salas.json: six rooms in clockwise order; etapa 3 adds capa', () => {
   const s = carregarSalas();
   assert.deepEqual(s.map(x => x.chave), ORDEM_SALAS);
-  assert.deepEqual(s.filter(x => x.ativa).map(x => x.chave), ['pesquisa', 'roteiro', 'edicao', 'postagem']);
-  assert.deepEqual(salasInativas(s), ['capa', 'analise']);
+  assert.deepEqual(s.filter(x => x.ativa).map(x => x.chave), ['pesquisa', 'roteiro', 'edicao', 'capa', 'postagem']);
+  assert.deepEqual(salasInativas(s), ['analise']);
 });
 
 test('carregarSalas refuses a missing room or a bad colour, in pt-BR', () => {
@@ -33,7 +33,7 @@ test('resumo: problema beats esperando beats trabalhando; fila counts every fich
   assert.equal(r.edicao.texto, 'Editando o vídeo');
   assert.equal(r.postagem.estado, 'esperando'); assert.equal(r.postagem.texto, 'Aprove o post');
   assert.equal(r.edicao.contador, 2); // c (aprovacao-pacote) e d (concluido) já passaram pela edição
-  assert.equal(r.capa.estado, 'inativa'); assert.equal(r.capa.texto, 'Chega na próxima atualização');
+  assert.equal(r.analise.estado, 'inativa'); assert.equal(r.analise.texto, 'Chega na próxima atualização');
   const comErro = resumoDasSalas(salas, [...fichas, f('e', 'aprovacao-video', { erro: { sala: 'edicao', mensagem: 'x', em: 1 } })]);
   assert.equal(comErro.find(x => x.chave === 'edicao').estado, 'problema');
 });
@@ -54,4 +54,13 @@ test('resumo: Pesquisa and Roteiro count only videos that went through them', ()
   assert.equal(r.pesquisa.contador, 1); assert.equal(r.roteiro.contador, 1);
   assert.equal(r.edicao.contador, 1); // só o b passou pela edição
   assert.equal(r.roteiro.estado, 'ocioso'); // aguardando-gravacao é da "gravação", não do Roteiro
+});
+
+test('resumo: Capa counts videos that went past it', () => {
+  const salas = carregarSalas();
+  const passou = { ...criarFicha({ id: 'c', porta: 'bruto', bruto: 'b.mp4', agora: 1 }), etapa: 'postagem' };
+  passou.historico.push({ em: 2, etapa: 'capa', nota: 'concluiu' });
+  const naCapa = { ...criarFicha({ id: 'd', porta: 'bruto', bruto: 'b.mp4', agora: 1 }), etapa: 'capa' };
+  const r = Object.fromEntries(resumoDasSalas(salas, [passou, naCapa]).map(x => [x.chave, x]));
+  assert.equal(r.capa.contador, 1); assert.equal(r.capa.fila, 1); assert.equal(r.capa.estado, 'trabalhando');
 });

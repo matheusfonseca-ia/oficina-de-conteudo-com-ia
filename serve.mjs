@@ -17,8 +17,12 @@ import { PaineisMaquina } from './lib/painel-maquina.mjs';
 import { checarFerramentas } from './lib/checagem.mjs';
 import { criarFicha } from './lib/ficha.mjs';
 import { lerCerebro, salvarPerfil } from './lib/cerebro.mjs';
+import { estadoConexoes, conectar, desconectar, SERVICOS } from './lib/conexoes.mjs';
+import { criarHiggsfield } from './lib/higgsfield.mjs';
 
-const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia']);
+const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia', 'escolheu-capa']);
+// How each connection checks a key before saving it.
+const TESTAR_CHAVE = { higgsfield: chave => criarHiggsfield({ chave }).testar() };
 const LIMITE_IDEIA = 300;
 const versao = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
@@ -94,7 +98,7 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
   const server = http.createServer(async (req, res) => {
     try {
       if (!hostOk(req)) return json(res, 403, { erro: 'Acesso só por este computador.' });
-      if (req.method === 'POST' && req.headers['x-oficina'] !== '1') return json(res, 403, { erro: 'Requisição recusada.' });
+      if ((req.method === 'POST' || req.method === 'DELETE') && req.headers['x-oficina'] !== '1') return json(res, 403, { erro: 'Requisição recusada.' });
       const url = new URL(req.url, 'http://127.0.0.1');
       if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/oficina.html')) {
         const pagina = path.join(ROOT, 'dist', 'oficina.html');
@@ -105,7 +109,26 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
         const fichas = store.listar();
         const videos = fichas.map(f => ({ ...f, andamento: orquestrador.andamento(f.id), painelUrl: paineis.aberto(f.id), trabalhando: orquestrador.ocupado(f.id) }));
         return json(res, 200, { versao, salas: resumoDasSalas(salas, fichas, ultimaChecagem), videos, checagem: ultimaChecagem,
-          cerebro: { preenchido: lerCerebro(store.cerebroDir).preenchido } });
+          cerebro: { preenchido: lerCerebro(store.cerebroDir).preenchido }, conexoes: estadoConexoes(config.dados) });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/conexoes') {
+        let dados; try { dados = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
+        if (!SERVICOS.includes(dados?.servico)) return json(res, 400, { erro: 'Essa conexão eu não conheço.' });
+        try { return json(res, 200, { conexoes: await conectar(config.dados, dados.servico, dados.chave, { testar: TESTAR_CHAVE[dados.servico] }) }); }
+        catch (e) { return json(res, 400, { erro: e.message }); }
+      }
+      const mc = url.pathname.match(/^\/api\/conexoes\/([^/]+)$/);
+      if (req.method === 'DELETE' && mc) {
+        if (!SERVICOS.includes(mc[1])) return json(res, 400, { erro: 'Essa conexão eu não conheço.' });
+        return json(res, 200, { conexoes: desconectar(config.dados, mc[1]) });
+      }
+      // Covers: only capa-N.png and capa-ia.png from the video's capa/ folder.
+      const mcapa = url.pathname.match(/^\/api\/videos\/([^/]+)\/capa\/(capa-(?:\d+|ia)\.png)$/);
+      if (req.method === 'GET' && mcapa) {
+        let id; try { id = decodeURIComponent(mcapa[1]); } catch { return json(res, 404, { erro: 'Capa não encontrada.' }); }
+        const arq = store.idValido(id) ? path.join(store.pasta(id), 'capa', mcapa[2]) : null;
+        if (!arq || !fs.existsSync(arq)) return json(res, 404, { erro: 'Capa não encontrada.' });
+        return enviar(res, arq, { 'content-type': 'image/png', 'cache-control': 'no-store' });
       }
       if (req.method === 'POST' && url.pathname === '/api/checagem') { ultimaChecagem = checar(); return json(res, 200, ultimaChecagem); }
       if (req.method === 'POST' && url.pathname === '/api/upload') {

@@ -5,6 +5,7 @@ export const api = {
   estado: () => fetch('/api/estado', { cache: 'no-store' }).then(ler),
   get: caminho => fetch(caminho, { cache: 'no-store' }).then(ler),
   post: (caminho, corpo = {}) => fetch(caminho, { method: 'POST', headers: H, body: JSON.stringify(corpo) }).then(ler),
+  del: caminho => fetch(caminho, { method: 'DELETE', headers: H }).then(ler),
   upload: file => arquivo('/api/upload', file),
   uploadBruto: (id, file) => arquivo(`/api/videos/${encodeURIComponent(id)}/bruto`, file),
 };

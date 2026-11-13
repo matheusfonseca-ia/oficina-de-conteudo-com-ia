@@ -5,14 +5,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { criarServidor } from '../serve.mjs';
 import { loadConfig } from '../config.mjs';
+import { iniciarHiggsfieldFalso, CHAVE_CERTA } from './fixtures/higgsfield-falso.mjs';
 
 const FAKE = path.resolve('tests/fixtures/claude-falso.mjs');
 const PAINEL = path.resolve('tests/fixtures/painel-falso.mjs');
+// The real cover room needs FFmpeg and a browser: these tests use a fake that writes one tiny PNG per option.
+const capaFalsa = async ({ pastaVideo }) => {
+  fs.mkdirSync(path.join(pastaVideo, 'capa'), { recursive: true });
+  for (const n of [1, 2]) fs.writeFileSync(path.join(pastaVideo, 'capa', `capa-${n}.png`), 'png' + n);
+  fs.writeFileSync(path.join(pastaVideo, 'capa', 'frame-01.jpg'), 'jpg');
+  return { opcoes: [1, 2].map(n => ({ arquivo: `capa/capa-${n}.png`, titulo: `Título ${n}`, origem: 'fabrica' })), escolhida: 0, aviso: null };
+};
 
 async function subir(t) {
   const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-srv-'));
   const config = loadConfig({ OFC_DATA: dados, PORT: '0', OFC_CLAUDE_COMMAND: process.execPath, OFC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
-  const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0 });
+  const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0, runners: { capa: capaFalsa } });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   app.iniciar();
   const base = `http://127.0.0.1:${app.server.address().port}`;
@@ -36,6 +44,7 @@ test('upload → edição prepara → painel → Studio → aprovar → postagem
   assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' })).status, 200);
   e = await ate(e => e.videos[0].etapa === 'aprovacao-pacote');
   assert.equal(e.videos[0].postagem.legenda, 'Legenda de teste');
+  assert.equal(e.videos[0].capa.opcoes.length, 2);
   await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' });
   e = await ate(e => e.videos[0].etapa === 'pronto-pra-postar');
   const mp4 = await fetch(`${base}/api/videos/${id}/final.mp4`);
@@ -238,4 +247,44 @@ test('ideia: a tema that is not a string is refused with 400', async t => {
   for (const tema of [{ a: 1 }, ['x'], 5, null]) {
     const r = await post('/api/ideia', { tema }); assert.equal(r.status, 400); assert.match((await r.json()).erro, /Escreva a ideia/);
   }
+});
+
+async function ateAprovacaoDoPost(t) {
+  const s = await subir(t);
+  await s.post('/api/upload', new Uint8Array([1, 2, 3]), { 'x-nome-arquivo': encodeURIComponent('Capa.mp4'), 'content-type': 'application/octet-stream' });
+  let e = await s.ate(e => e.videos[0]?.etapa === 'escolhas-edicao');
+  const id = e.videos[0].id;
+  await s.post(`/api/videos/${id}/painel`);
+  await s.ate(e => e.videos[0].etapa === 'aprovacao-video');
+  await s.post(`/api/videos/${id}/evento`, { tipo: 'aprovou' });
+  await s.ate(e => e.videos[0].etapa === 'aprovacao-pacote');
+  return { ...s, id };
+}
+
+test('capa: escolher outra, servir o PNG e recusar arquivo fora das capas', { timeout: 30000 }, async t => {
+  const { post, ate, base, id } = await ateAprovacaoDoPost(t);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'escolheu-capa', indice: 1 })).status, 200);
+  await ate(e => e.videos[0].capa.escolhida === 1);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'escolheu-capa', indice: 7 })).status, 409);
+  const png = await fetch(`${base}/api/videos/${id}/capa/capa-2.png`);
+  assert.equal(png.status, 200); assert.equal(png.headers.get('content-type'), 'image/png'); assert.equal(await png.text(), 'png2');
+  for (const ruim of ['frame-01.jpg', '..%2Fficha.json', 'capa-3.png']) assert.equal((await fetch(`${base}/api/videos/${id}/capa/${ruim}`)).status, 404, ruim);
+});
+
+test('conexões: conectar o Higgsfield testa a chave e o estado nunca mostra a chave', { timeout: 20000 }, async t => {
+  const hf = await iniciarHiggsfieldFalso(); t.after(() => hf.fechar());
+  const antes = process.env.OFC_HIGGSFIELD_URL; process.env.OFC_HIGGSFIELD_URL = hf.base;
+  t.after(() => { if (antes === undefined) delete process.env.OFC_HIGGSFIELD_URL; else process.env.OFC_HIGGSFIELD_URL = antes; });
+  const { post, estado, base } = await subir(t);
+  assert.deepEqual((await estado()).conexoes, { higgsfield: false });
+  const errada = await post('/api/conexoes', { servico: 'higgsfield', chave: 'x:y' });
+  assert.equal(errada.status, 400); assert.match((await errada.json()).erro, /não funcionou/);
+  const certa = await post('/api/conexoes', { servico: 'higgsfield', chave: CHAVE_CERTA });
+  assert.equal(certa.status, 200); assert.deepEqual((await certa.json()).conexoes, { higgsfield: true });
+  const e = await (await fetch(base + '/api/estado')).text();
+  assert.ok(e.includes('"higgsfield":true') && !e.includes(CHAVE_CERTA));
+  assert.equal((await post('/api/conexoes', { servico: 'outro', chave: 'a:b' })).status, 400);
+  assert.equal((await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE' })).status >= 400, true, 'sem x-oficina é recusado');
+  const sai = await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE', headers: { 'x-oficina': '1' } });
+  assert.deepEqual((await sai.json()).conexoes, { higgsfield: false });
 });

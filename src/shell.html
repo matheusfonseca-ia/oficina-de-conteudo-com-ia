@@ -21,16 +21,9 @@
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #hud { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 
-  /* top bar */
-  #topbar {
-    position: fixed; top: 0; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 20px;
-    background: color-mix(in srgb, var(--cream) 90%, transparent); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--hairline); z-index: 24;
-  }
-  #topbar .marca { font-size: 15px; font-weight: 700; line-height: 1.2; letter-spacing: -.02em; }
 
   #overviewBtn {
-    position: fixed; top: 66px; left: 20px; z-index: 23;
+    position: fixed; top: 18px; left: 20px; z-index: 23;
     font-family: var(--ui); font-size: 12px; letter-spacing: .1em;
     background: var(--ink); color: #15161A; border: 0; border-radius: 99px;
     padding: 9px 16px; cursor: pointer; opacity: 0; transform: translateY(-6px);
@@ -112,7 +105,7 @@
 
   /* the videos panel — the Oficina's task panel, dark */
   #painel {
-    position: fixed; top: 68px; right: 18px; bottom: 18px; width: 400px; overflow: auto; z-index: 15;
+    position: fixed; top: 18px; right: 18px; bottom: 18px; width: 400px; overflow: auto; z-index: 15;
     background: #1E1F24; color: var(--ink); border: 1px solid var(--hairline); border-radius: 16px; padding: 16px 16px 13px;
   }
   body.limpo #painel, body.limpo .badge, body.limpo .pill { display: none !important; }
@@ -140,7 +133,6 @@
   .legenda { white-space: pre-wrap; font-size: 13px; background: #0F1013; border-radius: 8px; padding: 8px; margin-top: 8px; max-height: 160px; overflow: auto; }
   .barra { height: 6px; background: rgba(236,234,227,.12); border-radius: 3px; margin-top: 6px; } .barra b { display: block; height: 100%; background: var(--ink); border-radius: 3px; }
   details summary { cursor: pointer; }
-  #topbar #abrir-cerebro { margin-left: auto; }
   .refs { padding-left: 18px; margin: 8px 0; } .refs li { margin-bottom: 10px; font-size: 13px; } .refs a { color: var(--ink); } .refs button { margin-top: 4px; }
   .janela { position: fixed; inset: 0; background: rgba(15,16,19,.72); display: none; align-items: center; justify-content: center; z-index: 60; }
   .janela.aberta { display: flex; }
@@ -148,6 +140,37 @@
   .janela h2 { margin: 0 0 6px; font-size: 16px; }
   .janela label { display: block; font-size: 13px; color: var(--grey); margin-top: 12px; }
   .janela textarea, .janela input[type=text], .janela input[type=url] { width: 100%; font: 14px var(--ui); color: var(--ink); background: #1B1C21; border: 1px solid var(--hairline); border-radius: 8px; padding: 8px; margin-top: 4px; }
+  /* the boss interview: one question at a time, with a progress bar */
+  #cerebro .caixa { padding: 22px; }
+  #cerebro .progresso { display: flex; justify-content: space-between; font-size: 12px; color: var(--grey); margin-top: 16px; }
+  #cerebro .trilho { height: 6px; background: rgba(236,234,227,.12); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  #cerebro .trilho b { display: block; height: 100%; width: 0; background: #D1DECD; border-radius: 3px; transition: width .45s var(--ease); }
+  #cerebro .passo { display: none; margin-top: 18px; }
+  #cerebro .passo.atual { display: block; animation: entrar .35s var(--ease); }
+  #cerebro .passo label { margin-top: 0; font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
+  #cerebro .passo .dica { font-size: 13px; color: var(--grey); margin: 4px 0 10px; }
+  #cerebro .passo textarea, #cerebro .passo input { font-size: 15px; padding: 10px 12px; }
+  #cerebro .passo input + input { margin-top: 8px; }
+  #cerebro-erro, #conexoes-erro { color: #F2A0A0; font-size: 13px; min-height: 18px; margin-top: 8px; }
+  /* the boss window: Perfil and Conexões tabs */
+  #cerebro .abas { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--hairline); }
+  #cerebro .aba { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px 8px; color: var(--grey); }
+  #cerebro .aba.ativa { color: var(--ink); border-bottom-color: #D1DECD; }
+  #conexoes .conexao { border: 1px solid var(--hairline); border-radius: 10px; padding: 12px; margin-top: 12px; }
+  #conexoes .conexao h3 { margin: 0 0 4px; font-size: 15px; }
+  #conexoes .conexao a { color: var(--ink); font-size: 13px; }
+  #conexoes .conexao .ok { color: #9BE3A8; font-size: 13px; font-weight: 700; margin-top: 8px; }
+  /* covers on the post approval */
+  .capas { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .capas button { padding: 0; border: 2px solid transparent; border-radius: 8px; background: #0F1013; position: relative; line-height: 0; }
+  .capas button.escolhida { border-color: #EADC8F; }
+  .capas img { max-height: 120px; max-width: 120px; border-radius: 6px; }
+  .capas .selo { position: absolute; left: 4px; top: 4px; line-height: 1.2; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: #EADC8F; color: #15161A; }
+  .capas .selo.ia { left: auto; right: 4px; background: #BFA2E3; }
+  .aviso-capa { color: #E8C35A; font-size: 12px; margin-top: 6px; }
+  #cerebro .acoes { margin-top: 4px; align-items: center; }
+  #cerebro .acoes .direita { margin-left: auto; display: flex; gap: 6px; }
+  @keyframes entrar { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
   .janela label.checar { display: flex; gap: 8px; align-items: center; color: var(--ink); }
   .janela label.checar input { width: auto; margin: 0; }
   #leitura .caixa { width: min(900px, 94vw); height: 90vh; display: flex; flex-direction: column; }
@@ -169,7 +192,7 @@
 <body class="dark">
 <canvas id="scene"></canvas>
 <div id="hud"></div>
-<div id="topbar"><span class="marca">OFICINA DE CONTEÚDO</span><button id="abrir-cerebro" title="O que a Oficina sabe sobre você">Cérebro</button></div>
+
 <div id="vignette"></div>
 <button id="overviewBtn">◂ VISÃO GERAL</button>
 <aside id="painel">
@@ -193,17 +216,35 @@
   <label class="checar"><input type="checkbox" id="ideia-pular"> Já sei o que quero: pular a pesquisa</label>
   <div class="acoes"><button type="button" id="ideia-cancelar">Cancelar</button><button type="submit" id="ideia-enviar" class="forte">Começar</button></div>
 </form></div>
-<div id="cerebro" class="janela"><form id="cerebro-form" class="caixa">
-  <h2>Conte quem você é</h2>
-  <div class="etapa">A Oficina usa isso em todas as salas: na pesquisa, no roteiro e na legenda. Dá pra mudar quando quiser no botão Cérebro, lá em cima.</div>
+<div id="cerebro" class="janela"><div class="caixa">
+  <div class="abas" role="tablist"><button type="button" class="aba ativa" data-aba="perfil" role="tab">Perfil</button><button type="button" class="aba" data-aba="conexoes" role="tab">Conexões</button></div>
+  <form id="cerebro-form" data-painel="perfil">
+  <h2>Conte pro chefe quem você é</h2>
+  <div class="etapa">O chefe passa isso pra todas as salas: a pesquisa, o roteiro e a legenda. Dá pra mudar quando quiser: é só clicar no chefe, no meio da Oficina.</div>
   <div id="cerebro-antigo" class="etapa" hidden>Você já tinha um perfil escrito à mão. Ao salvar, ele fica guardado no arquivo perfil-antigo.md, dentro da pasta cerebro.</div>
-  <label>Sobre o que você fala? (o seu nicho)<textarea name="nicho" rows="2" maxlength="600"></textarea></label>
-  <label>Pra quem você fala? (o seu público)<textarea name="publico" rows="2" maxlength="600"></textarea></label>
-  <label>Como você fala? (o seu tom de voz)<textarea name="tom" rows="2" maxlength="600" placeholder="Ex.: direto, com humor, sem palavrão"></textarea></label>
-  <label>O @ do seu perfil<input type="text" name="arroba" maxlength="31" placeholder="@seuperfil"></label>
-  <label>Até 3 vídeos que você admira (links)<input type="url" name="ref1" placeholder="https://"><input type="url" name="ref2" placeholder="https://"><input type="url" name="ref3" placeholder="https://"></label>
-  <div class="acoes"><button type="button" id="cerebro-depois">Depois</button><button type="submit" id="cerebro-salvar" class="forte">Salvar</button></div>
-</form></div>
+  <div class="progresso"><span id="cerebro-contagem">Pergunta 1 de 5</span><span id="cerebro-pct">0%</span></div>
+  <div class="trilho"><b id="cerebro-barra"></b></div>
+  <div class="passo" data-obrigatorio="Conte sobre o que você fala."><label for="c-nicho">Sobre o que você fala?</label><div class="dica">O seu nicho, em uma ou duas frases.</div><textarea id="c-nicho" name="nicho" rows="3" maxlength="600" placeholder="Ex.: IA e automação pra pequenos negócios"></textarea></div>
+  <div class="passo" data-obrigatorio="Conte pra quem você fala."><label for="c-publico">Pra quem você fala?</label><div class="dica">O seu público: quem assiste e o que busca.</div><textarea id="c-publico" name="publico" rows="3" maxlength="600" placeholder="Ex.: donos de loja que querem vender mais sem contratar"></textarea></div>
+  <div class="passo" data-obrigatorio="Conte como você fala."><label for="c-tom">Como você fala?</label><div class="dica">O seu tom de voz.</div><textarea id="c-tom" name="tom" rows="3" maxlength="600" placeholder="Ex.: direto, com humor, sem palavrão"></textarea></div>
+  <div class="passo"><label for="c-arroba">Qual é o @ do seu perfil?</label><div class="dica">Opcional.</div><input type="text" id="c-arroba" name="arroba" maxlength="31" placeholder="@seuperfil"></div>
+  <div class="passo"><label for="c-ref1">Quais perfis você admira?</label><div class="dica">Até 3. Pode ser o @ ou o link do perfil. Opcional.</div><input type="text" id="c-ref1" name="ref1" placeholder="@perfil"><input type="text" name="ref2" placeholder="@perfil"><input type="text" name="ref3" placeholder="@perfil"></div>
+  <div id="cerebro-erro" role="alert"></div>
+  <div class="acoes"><button type="button" id="cerebro-depois">Depois</button><span class="direita"><button type="button" id="cerebro-voltar">Voltar</button><button type="submit" id="cerebro-salvar" class="forte">Próximo</button></span></div>
+  </form>
+  <div id="conexoes" data-painel="conexoes" hidden>
+    <h2>Conexões</h2>
+    <div class="etapa">Ligue serviços seus pra Oficina fazer mais. As chaves ficam só neste computador.</div>
+    <div class="conexao" data-servico="higgsfield">
+      <h3>Higgsfield</h3>
+      <div class="etapa">Gera mais uma opção de capa com IA a partir do seu vídeo.</div>
+      <div class="desligada"><a href="https://cloud.higgsfield.ai" target="_blank" rel="noopener">Como tirar a chave</a><input type="text" placeholder="ID:SEGREDO" autocomplete="off" spellcheck="false"><div class="acoes"><button type="button" class="forte" data-con="conectar">Conectar</button></div></div>
+      <div class="ligada" hidden><div class="ok">Conectado</div><div class="acoes"><button type="button" data-con="desconectar">Desconectar</button></div></div>
+    </div>
+    <div id="conexoes-erro" role="alert"></div>
+    <div class="acoes"><button type="button" id="conexoes-fechar">Fechar</button></div>
+  </div>
+</div></div>
 <div id="leitura" class="janela"><div class="caixa">
   <div class="acoes" style="justify-content:space-between;align-items:center;margin:0"><h2 id="leitura-titulo"></h2><button type="button" id="leitura-fechar">Fechar</button></div>
   <div id="leitura-texto"></div>

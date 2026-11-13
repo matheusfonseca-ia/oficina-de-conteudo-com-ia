@@ -7,17 +7,18 @@ Uma oficina que roda no seu computador: seis salas com agentes de IA que levam o
 1. **Pesquisa** (funciona): acha na web vídeos que já funcionaram sobre a sua ideia e explica por quê
 2. **Roteiro** (funciona): escreve o roteiro no seu tom de voz pra você gravar lendo
 3. **Edição** (funciona): edita o vídeo com a Máquina de Edição
-4. **Capa** (em breve)
+4. **Capa** (funciona): escolhe o melhor momento do vídeo e monta 2 ou 3 capas com título; com a sua chave do Higgsfield, faz mais uma com IA
 5. **Postagem** (funciona, de forma semiautomática): escreve a legenda e deixa tudo pronto pra você copiar
 6. **Análise** (em breve)
 
-Você pode começar de dois jeitos. **Tenho uma ideia**: a Pesquisa traz referências, você escolhe uma, o Roteiro escreve o texto, você aprova, grava lendo e manda a gravação pelo próprio cartão. **Já gravei**: você joga o vídeo e ele vai direto pra Edição. Nos dois casos, você escolhe o formato e o estilo, aprova o vídeo e recebe a legenda pronta. Capa e Análise aparecem na cena, mas ainda não trabalham.
+Você pode começar de dois jeitos. **Tenho uma ideia**: a Pesquisa traz referências, você escolhe uma, o Roteiro escreve o texto, você aprova, grava lendo e manda a gravação pelo próprio cartão. **Já gravei**: você joga o vídeo e ele vai direto pra Edição. Nos dois casos, você escolhe o formato e o estilo, aprova o vídeo e, na aprovação do post, escolhe a capa e recebe a legenda pronta. A Análise aparece na cena, mas ainda não trabalha.
 
 ## O que você precisa antes
 
 - **Máquina de Edição com IA Básico** instalada. Os formatos, os efeitos sonoros e os efeitos de vídeo vêm dela; com o Completo instalado, os formatos dele também aparecem. A Oficina traz o próprio motor de edição, então não é preciso mexer na Máquina.
 - **Node.js 22.13 ou mais novo**
 - **Claude Code** instalado e com login feito
+- **Google Chrome** ou **Microsoft Edge**: a sala de Capa usa o navegador pra montar a imagem da capa
 
 ## Instalar
 
@@ -44,7 +45,15 @@ Tudo fica na pasta `~/.oficina-de-conteudo` (na pasta do seu usuário), fora des
 
 ## Conte pra Oficina quem você é
 
-Na primeira vez que você abre a Oficina, ela pergunta o seu nicho, o seu público, o seu tom de voz, o @ do seu perfil e até 3 vídeos que você admira. Pesquisa, Roteiro e Postagem usam isso. Pra mudar depois, clique em **Cérebro**, lá em cima. Cada vez que você pede um ajuste na Pesquisa, no Roteiro ou na legenda, a Oficina anota e leva em conta nos próximos vídeos (fica em `~/.oficina-de-conteudo/cerebro/aprendizados/`).
+Na primeira vez que você abre a Oficina, o chefe pergunta, uma pergunta por vez, o seu nicho, o seu público, o seu tom de voz, o @ do seu perfil e até 3 perfis que você admira. Pesquisa, Roteiro, Capa e Postagem usam isso. Pra mudar depois, clique no **chefe**, no meio da Oficina. Cada vez que você pede um ajuste na Pesquisa, no Roteiro, na capa ou na legenda, a Oficina anota e leva em conta nos próximos vídeos (fica em `~/.oficina-de-conteudo/cerebro/aprendizados/`).
+
+## Conexões
+
+Clique no chefe e abra a aba **Conexões** (ou clique em **Conectar Higgsfield** na placa da Capa).
+
+- **Higgsfield:** gera mais uma opção de capa com IA a partir do seu vídeo. Crie a chave em [cloud.higgsfield.ai](https://cloud.higgsfield.ai) e cole no formato `ID:SEGREDO`. Cada capa gerada usa crédito da sua conta do Higgsfield.
+
+A chave fica só no seu computador, em `~/.oficina-de-conteudo/config.json`, e a Oficina testa antes de salvar. Sem ela, a Capa continua funcionando com as capas de frame e título.
 
 ## Atualizar
 
@@ -52,4 +61,4 @@ Se você baixou com git, dentro da pasta rode `git pull` e depois o instalador d
 
 ## O que vem nas próximas versões
 
-Capa, publicação automática pelo Post for Me, pesquisa completa com Apify e Análise.
+Publicação automática pelo Post for Me e a sala de Análise.

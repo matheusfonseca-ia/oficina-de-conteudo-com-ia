@@ -13,6 +13,10 @@ command -v claude >/dev/null || { echo "Falta o Claude Code. Instale e faça log
 cd "$pasta"
 npm install --no-audit --no-fund
 node build.mjs
+# A Edição usa o HyperFrames pelo npx. A Máquina só baixa ele na primeira edição; a Oficina baixa aqui,
+# senão a checagem (que não instala nada) acusa que falta.
+echo "Baixando o HyperFrames (só demora na primeira vez)..."
+npx --yes hyperframes --version >/dev/null || { echo "Não deu pra baixar o HyperFrames. Confira a internet e rode o instalador de novo."; exit 1; }
 
 mkdir -p "$dados"
 versao="$(node -p 'require("./package.json").version')"
