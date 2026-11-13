@@ -22,7 +22,7 @@ export function iniciarFormularios() {
   });
 
   // Clicking the boss (src/main.js) opens his window; a room card can ask for the Conexões tab.
-  addEventListener('abrir-chefe', e => abrirChefe(e.detail?.aba).catch(err => alert(err.message)));
+  addEventListener('abrir-chefe', e => abrirChefe(e.detail?.aba, e.detail?.servico).catch(err => alert(err.message)));
   for (const b of document.querySelectorAll('#cerebro .aba')) b.addEventListener('click', () => abrirChefe(b.dataset.aba).catch(err => alert(err.message)));
   $('#conexoes-fechar').addEventListener('click', () => fechar('#cerebro'));
   $('#conexoes').addEventListener('click', e => { const b = e.target.closest('[data-con]'); if (b) agirConexao(b); });
@@ -63,11 +63,13 @@ export async function abrirCerebro() {
   mostrarAba('perfil'); abrir('#cerebro'); irPara(0);
 }
 
-export async function abrirChefe(aba = 'perfil') {
+// `servico`: the connection a room card asked for (its key field gets the focus).
+export async function abrirChefe(aba = 'perfil', servico = null) {
   if (aba !== 'conexoes') return abrirCerebro();
   mostrarAba('conexoes'); abrir('#cerebro');
   pintarConexoes((await api.estado()).conexoes || {});
-  $('#conexoes input')?.focus();
+  const campos = [...document.querySelectorAll('#conexoes .desligada:not([hidden]) input')];
+  (campos.find(i => i.closest('.conexao').dataset.servico === servico) || campos[0])?.focus();
 }
 
 function mostrarAba(aba) {
@@ -115,9 +117,13 @@ function irPara(i) {
   passos[passoAtual].querySelector('textarea, input').focus();
 }
 
-export function abrirLeitura(roteiro) {
-  $('#leitura-titulo').textContent = roteiro?.titulo || 'Roteiro';
-  $('#leitura-texto').textContent = textoDoRoteiro(roteiro);
+export function abrirLeitura(roteiro) { abrirTexto(roteiro?.titulo || 'Roteiro', textoDoRoteiro(roteiro)); }
+
+// The same reading screen for any text (the weekly summary is smaller, so a long text fits).
+export function abrirTexto(titulo, texto, { compacto = false } = {}) {
+  $('#leitura-titulo').textContent = titulo;
+  $('#leitura-texto').textContent = texto;
+  $('#leitura-texto').classList.toggle('compacto', compacto);
   abrir('#leitura');
 }
 

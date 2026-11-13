@@ -89,6 +89,7 @@ export function decorar(chave, cor) {
       const p = parede(g); quadro(p, 8, 4.6, '#F7F7F2');
       [1.2, 2.1, 1.6, 2.9, 3.6].forEach((h, i) => { const b = rbox(0.9, 0.3, h, cor, 0.08); b.position.set(-3 + i * 1.5, 0.5, 0.2); p.add(b); });
       const imp = rbox(2.4, 1.8, 1.2, '#E5E5E0', 0.15); imp.position.set(6, 0.12, 4); g.add(imp);
+      const papel = rbox(1.6, 1.2, 0.04, '#FFFFFF', 0.02); papel.position.set(6, 1.35, 4.6); papel.name = 'papel'; g.add(papel); // prints a new report (src/painel.js)
       const caneca = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.55, 14), mat(cor)); caneca.position.set(4.5, 0.4, 6); g.add(caneca);
     },
   };
@@ -146,12 +147,14 @@ function tvGrafico(cor) {
   const pe = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2, 8), mat('#3A3A3E')); pe.position.y = 1.1; g.add(pe);
   const base = rbox(1.4, 0.8, 0.12, '#3A3A3E', 0.05); g.add(base);
   const tela = rbox(3.6, 0.18, 2.2, '#151414', 0.08); tela.position.y = 2.1; g.add(tela);
-  const img = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.9), new THREE.MeshBasicMaterial({ map: textura(330, 190, x => {
+  const grafico = textura(330, 190, x => {
     x.fillStyle = '#16171B'; x.fillRect(0, 0, 330, 190);
     x.strokeStyle = cor; x.lineWidth = 6; x.beginPath(); [[20, 160], [80, 120], [140, 135], [200, 80], [260, 95], [310, 30]].forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b))); x.stroke();
     x.fillStyle = 'rgba(255,255,255,.12)'; for (let i = 1; i < 4; i++) x.fillRect(0, i * 45, 330, 2);
-  }) }));
-  img.position.set(0, 3.2, 0.1); g.add(img);
+  });
+  // own material with a glow (emissiveIntensity): the screen lights up when the Análise reads new numbers (src/painel.js)
+  const img = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.9), new THREE.MeshStandardMaterial({ map: grafico, emissiveMap: grafico, emissive: '#FFFFFF', emissiveIntensity: 0.4 }));
+  img.position.set(0, 3.2, 0.1); img.name = 'tela'; g.add(img);
   return g;
 }
 function caixas(cor) {

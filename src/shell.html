@@ -168,6 +168,31 @@
   .capas .selo { position: absolute; left: 4px; top: 4px; line-height: 1.2; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: #EADC8F; color: #15161A; }
   .capas .selo.ia { left: auto; right: 4px; background: #BFA2E3; }
   .aviso-capa { color: #E8C35A; font-size: 12px; margin-top: 6px; }
+  /* publishing through Post for Me: where to post, when, the scheduled card and the readings of the numbers */
+  button.link { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--grey); font: 500 12px var(--ui); text-decoration: underline; cursor: pointer; display: block; }
+  button.link:hover { color: var(--ink); }
+  .publicar { margin-top: 10px; border-top: 1px solid var(--hairline); padding-top: 8px; }
+  .publicar .titulo-bloco { font: 700 11px var(--ui); letter-spacing: .08em; color: var(--grey); text-transform: uppercase; margin: 8px 0 4px; }
+  .publicar .rede { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; }
+  .publicar .rede input, .publicar .quando input[type=radio] { width: auto; margin: 0; }
+  .publicar .aviso-rede { font-size: 11px; color: #E8C35A; margin: 0 0 4px 24px; line-height: 1.35; }
+  .publicar .quando { display: flex; gap: 6px; }
+  .publicar .quando label { flex: 1; display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; border: 1px solid var(--hairline); border-radius: 7px; padding: 7px 8px; cursor: pointer; background: var(--surface-soft); }
+  .publicar .quando label.marcada { background: var(--ink); color: #15161A; border-color: var(--ink); }
+  .publicar input[type=datetime-local] { width: 100%; font: 13px var(--ui); color: var(--ink); background: #1B1C21; border: 1px solid var(--hairline); border-radius: 8px; padding: 8px; margin-top: 8px; color-scheme: dark; }
+  .publicar input[type=datetime-local][hidden] { display: none; }
+  .redes-agendadas { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .redes-agendadas li { padding: 3px 0; }
+  .redes-agendadas .erro { margin: 2px 0 4px; }
+  .redes-agendadas a, .links-posts a { color: var(--ink); }
+  .links-posts { font-size: 13px; margin-top: 6px; color: var(--grey); }
+  .leitura-numeros { border-top: 1px solid var(--hairline); margin-top: 10px; padding-top: 8px; font-size: 13px; }
+  .leitura-numeros h4 { margin: 0 0 4px; font-size: 13px; }
+  .leitura-numeros .numeros { color: var(--grey); }
+  .leitura-numeros .estrelas { color: #EADC8F; letter-spacing: 2px; font-size: 15px; margin: 4px 0; }
+  .leitura-numeros ul { margin: 2px 0 4px; padding-left: 18px; }
+  .leitura-numeros .rotulo { font-weight: 700; margin-top: 4px; }
+  #leitura-texto.compacto { font-size: 17px; line-height: 1.6; }
   #cerebro .acoes { margin-top: 4px; align-items: center; }
   #cerebro .acoes .direita { margin-left: auto; display: flex; gap: 6px; }
   @keyframes entrar { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
@@ -239,6 +264,13 @@
       <h3>Higgsfield</h3>
       <div class="etapa">Gera mais uma opção de capa com IA a partir do seu vídeo.</div>
       <div class="desligada"><a href="https://cloud.higgsfield.ai" target="_blank" rel="noopener">Como tirar a chave</a><input type="text" placeholder="ID:SEGREDO" autocomplete="off" spellcheck="false"><div class="acoes"><button type="button" class="forte" data-con="conectar">Conectar</button></div></div>
+      <div class="ligada" hidden><div class="ok">Conectado</div><div class="acoes"><button type="button" data-con="desconectar">Desconectar</button></div></div>
+    </div>
+    <div class="conexao" data-servico="postForMe">
+      <h3>Post for Me</h3>
+      <div class="etapa">Publica ou agenda o post nas suas redes e deixa a Análise ler os números.</div>
+      <div class="etapa">Custa US$ 10 por mês, direto no Post for Me.</div>
+      <div class="desligada"><a href="https://app.postforme.dev" target="_blank" rel="noopener">Como tirar a chave</a><input type="text" placeholder="Cole a chave aqui" autocomplete="off" spellcheck="false"><div class="acoes"><button type="button" class="forte" data-con="conectar">Conectar</button></div></div>
       <div class="ligada" hidden><div class="ok">Conectado</div><div class="acoes"><button type="button" data-con="desconectar">Desconectar</button></div></div>
     </div>
     <div id="conexoes-erro" role="alert"></div>
