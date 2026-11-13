@@ -92,6 +92,14 @@ test('semanaParaResumir: a semana anterior, se ainda não resumida e com leitura
   assert.equal(semanaParaResumir({ agora, ultimaSemana: null, leituras: [{ marco: '48h' }, { em: 'lixo' }] }), null);
 });
 
+test('semanaParaResumir: semana só com leituras "post não encontrado" não pede resumo (o resumo as ignora e lançaria erro)', () => {
+  const agora = new Date(2026, 10, 23);
+  const dentro = new Date(2026, 10, 18, 12).toISOString();
+  assert.equal(semanaParaResumir({ agora, ultimaSemana: null, leituras: [{ marco: '48h', em: dentro, naoAchou: true }] }), null);
+  // com uma leitura de verdade junto, a semana volta a valer
+  assert.equal(semanaParaResumir({ agora, ultimaSemana: null, leituras: [{ marco: '48h', em: dentro, naoAchou: true }, { marco: '7d', em: dentro }] }), '2026-11-16');
+});
+
 // ---------- volta() ----------
 
 function montar(t, { modo, chave = CHAVE_PFM, semCliente = false, prazos = PRAZOS_TESTE, agora = () => new Date(AGORA), resumir, ocupadas = [], base } = {}) {
@@ -362,6 +370,28 @@ test('volta: resumo roda mesmo depois de a ficha ter ido pra analise na mesma vo
   c.guardar(fichaAguardando('v1')); // publicada em 20/11: em 23/11 a de 48h já venceu, então vai pra analise nesta volta
   await c.relogio.volta();
   assert.deepEqual(semanas, ['2026-11-16']);
+});
+
+test('sinalizarChaveRecusada liga o aviso; uma volta inteira sem a chave ser recusada limpa', async t => {
+  const c = await montar(t);
+  assert.equal(c.relogio.avisos().postForMe, null);
+  c.relogio.sinalizarChaveRecusada();
+  assert.equal(c.relogio.avisos().postForMe, 'reconectar');
+  await c.relogio.volta();
+  assert.equal(c.relogio.avisos().postForMe, null);
+});
+
+test('volta: resumir recebe o signal da volta, e parar() o aborta', async t => {
+  let sinal = null, entrou;
+  const dentro = new Promise(r => { entrou = r; });
+  const c = await montar(t, { agora: SEGUNDA_23, resumir: (semana, s) => { sinal = s; entrou(); return new Promise(() => {}); } });
+  leituraNaSemana(c);
+  c.relogio.volta();
+  await dentro;
+  assert.ok(sinal instanceof AbortSignal);
+  assert.equal(sinal.aborted, false);
+  c.relogio.parar();
+  assert.equal(sinal.aborted, true);
 });
 
 // ---------- iniciar / parar ----------

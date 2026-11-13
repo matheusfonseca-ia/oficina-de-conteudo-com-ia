@@ -235,12 +235,12 @@ test('a busca pela legenda parte da aprovação (histórico), não de quando a O
 
 test('Review Focus 5: chave recusada ou sem conexão adia a leitura, sem erro e sem chamar o Claude', async t => {
   const errada = await cenario(t, { chave: 'pfm_chave_errada', run: naoChama });
-  assert.deepEqual(await errada.rodar(ficha()), { adiar: true });
+  assert.deepEqual(await errada.rodar(ficha()), { adiar: true, motivo: 'CHAVE' });
   const fora = await cenario(t, { run: naoChama });
   const morto = await iniciarPostForMeFalso(); const base = morto.base; await morto.fechar();
-  assert.deepEqual(await fora.rodar(ficha(), { deps: { cliente: criarPostForMe({ chave: CHAVE_PFM, base }), fichas: () => [] } }), { adiar: true });
+  assert.deepEqual(await fora.rodar(ficha(), { deps: { cliente: criarPostForMe({ chave: CHAVE_PFM, base }), fichas: () => [] } }), { adiar: true, motivo: 'SEM_CONEXAO' });
   // sem chave guardada e sem cliente: também adia
-  assert.deepEqual(await fora.rodar(ficha(), { deps: { fichas: () => [] } }), { adiar: true });
+  assert.deepEqual(await fora.rodar(ficha(), { deps: { fichas: () => [] } }), { adiar: true, motivo: 'SEM_CHAVE' });
 });
 
 test('rodarAnalise: recusa de uma conta não derruba as outras, mas recusa em todas vira erro (não "post apagado")', async t => {

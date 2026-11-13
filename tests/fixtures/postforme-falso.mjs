@@ -2,7 +2,7 @@
 // modo: 'ok' (every network posts fine), 'falha-youtube' (spc_yt fails with "Video too short"),
 //       'processando' (no results yet), 'sem-feed' (the feed has nothing).
 // `chamadas` records every request (metodo, caminho with query, comAutorizacao, cabecalhos, corpo) so tests
-// can assert what was NOT called. `posts` holds the body of every POST /v1/social-posts (post n is "sp_<n>").
+// can assert what was NOT called. DELETE of an unknown or already deleted post id answers 404. `posts` holds the body of every POST /v1/social-posts (post n is "sp_<n>").
 import http from 'node:http';
 
 export const CHAVE_PFM = 'pfm_chave_de_teste_123';
@@ -58,7 +58,12 @@ export async function iniciarPostForMeFalso({ modo = 'ok' } = {}) {
         return json(200, { data, meta: { total: data.length } });
       }
       const mpost = p.match(/^\/v1\/social-posts\/([^/]+)$/);
-      if (req.method === 'DELETE' && mpost) { apagados.add(mpost[1]); return json(200, { success: true }); }
+      if (req.method === 'DELETE' && mpost) {
+        // Like the real API: only a live post can be deleted; an unknown or already deleted one answers 404.
+        const vivo = posts.some((_, i) => idDoPost(i) === mpost[1]) && !apagados.has(mpost[1]);
+        if (!vivo) return json(404, { message: 'Post not found' });
+        apagados.add(mpost[1]); return json(200, { success: true });
+      }
       if (req.method === 'GET' && p === '/v1/social-post-results') {
         const idPost = url.searchParams.get('post_id');
         const i = posts.findIndex((_, k) => idDoPost(k) === idPost);

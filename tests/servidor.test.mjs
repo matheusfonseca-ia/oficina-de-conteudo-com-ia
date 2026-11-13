@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { criarServidor } from '../serve.mjs';
 import { loadConfig } from '../config.mjs';
+import { criarFicha } from '../lib/ficha.mjs';
 import { iniciarHiggsfieldFalso, CHAVE_CERTA } from './fixtures/higgsfield-falso.mjs';
+import { iniciarPostForMeFalso, CHAVE_PFM } from './fixtures/postforme-falso.mjs';
 
 const FAKE = path.resolve('tests/fixtures/claude-falso.mjs');
 const PAINEL = path.resolve('tests/fixtures/painel-falso.mjs');
@@ -17,10 +19,11 @@ const capaFalsa = async ({ pastaVideo }) => {
   return { opcoes: [1, 2].map(n => ({ arquivo: `capa/capa-${n}.png`, titulo: `Título ${n}`, origem: 'fabrica' })), escolhida: 0, aviso: null };
 };
 
-async function subir(t) {
+// `relogio: false`: o relógio não anda sozinho nestes testes (os que precisam dele chamam app.relogio.volta()).
+async function subir(t, { runners, relogio = false } = {}) {
   const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-srv-'));
   const config = loadConfig({ OFC_DATA: dados, PORT: '0', OFC_CLAUDE_COMMAND: process.execPath, OFC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
-  const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0, runners: { capa: capaFalsa } });
+  const app = criarServidor({ config, checagem: () => ({ ok: true, mensagem: null, itens: [] }), painelScript: PAINEL, intervaloCaixa: 0, runners: { capa: capaFalsa, ...runners }, relogio });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   app.iniciar();
   const base = `http://127.0.0.1:${app.server.address().port}`;
@@ -287,4 +290,291 @@ test('conexões: conectar o Higgsfield testa a chave e o estado nunca mostra a c
   assert.equal((await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE' })).status >= 400, true, 'sem x-oficina é recusado');
   const sai = await fetch(base + '/api/conexoes/higgsfield', { method: 'DELETE', headers: { 'x-oficina': '1' } });
   assert.deepEqual((await sai.json()).conexoes, { higgsfield: false, postForMe: false });
+});
+
+// ---------- Etapa 4: Post for Me, relógio e Análise ----------
+
+// Post for Me falso e OFC_POSTFORME_URL apontando pra ele durante o teste.
+async function comPostForMe(t, opcoes) {
+  const pfm = await iniciarPostForMeFalso(opcoes); t.after(() => pfm.fechar());
+  const antes = process.env.OFC_POSTFORME_URL; process.env.OFC_POSTFORME_URL = pfm.base;
+  t.after(() => { if (antes === undefined) delete process.env.OFC_POSTFORME_URL; else process.env.OFC_POSTFORME_URL = antes; });
+  return pfm;
+}
+const conectarPostForMe = (post, chave = CHAVE_PFM) => post('/api/conexoes', { servico: 'postForMe', chave });
+// Como ateAprovacaoDoPost, mas com o Post for Me já conectado (a chave certa do falso).
+async function ateAprovacaoDoPostComPfm(t) {
+  const s = await ateAprovacaoDoPost(t);
+  assert.equal((await conectarPostForMe(s.post)).status, 200);
+  return s;
+}
+const TT = { id: 'spc_tt', plataforma: 'tiktok', usuario: '@teste' };
+const YT = { id: 'spc_yt', plataforma: 'youtube', usuario: 'Teste' };
+const lerJson = arq => JSON.parse(fs.readFileSync(arq, 'utf8'));
+
+test('conexões: conectar o Post for Me testa a chave, o estado nunca mostra a chave e traz os avisos e o último resumo', { timeout: 20000 }, async t => {
+  await comPostForMe(t);
+  const { post, estado, base } = await subir(t);
+  const e0 = await estado();
+  assert.deepEqual(e0.conexoes, { higgsfield: false, postForMe: false });
+  assert.deepEqual(e0.avisos, { postForMe: null }); assert.equal(e0.resumo, null);
+  const errada = await conectarPostForMe(post, 'chave-errada-1234567');
+  assert.equal(errada.status, 400); assert.match((await errada.json()).erro, /não funcionou/);
+  const certa = await conectarPostForMe(post);
+  assert.equal(certa.status, 200); assert.deepEqual((await certa.json()).conexoes, { higgsfield: false, postForMe: true });
+  const texto = await (await fetch(base + '/api/estado')).text();
+  assert.ok(texto.includes('"postForMe":true') && !texto.includes(CHAVE_PFM));
+  const sai = await fetch(base + '/api/conexoes/postForMe', { method: 'DELETE', headers: { 'x-oficina': '1' } });
+  assert.deepEqual((await sai.json()).conexoes, { higgsfield: false, postForMe: false });
+});
+
+test('GET /api/postforme/contas: sem chave é 400; com chave traz as 3 contas e as redes do último post; sem internet é 502', { timeout: 20000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, base, dados } = await subir(t);
+  const sem = await fetch(base + '/api/postforme/contas');
+  assert.equal(sem.status, 400); assert.equal((await sem.json()).erro, 'Conecte o Post for Me primeiro.');
+  await conectarPostForMe(post);
+  let r = await (await fetch(base + '/api/postforme/contas')).json();
+  assert.deepEqual(r.contas.map(c => c.id), ['spc_tt', 'spc_yt', 'spc_ig']);
+  assert.deepEqual(r.contas[0], TT); assert.deepEqual(r.redes, []);
+  assert.ok(!JSON.stringify(r).includes(CHAVE_PFM));
+  const cfg = lerJson(path.join(dados, 'config.json')); cfg.redes = ['spc_yt']; fs.writeFileSync(path.join(dados, 'config.json'), JSON.stringify(cfg));
+  r = await (await fetch(base + '/api/postforme/contas')).json();
+  assert.deepEqual(r.redes, ['spc_yt']);
+  await pfm.fechar();
+  const fora = await fetch(base + '/api/postforme/contas');
+  assert.equal(fora.status, 502); assert.match((await fora.json()).erro, /Não consegui falar com o Post for Me/);
+});
+
+test('aprovar com publicar: a ficha vai pra agendado pelo Post for Me, as redes ficam guardadas e a chave nunca aparece', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, base, dados, app, id } = await ateAprovacaoDoPostComPfm(t);
+  const r = await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  assert.equal(r.status, 200);
+  await app.orquestrador.esperarOcioso();
+  const e = await (await fetch(base + '/api/estado')).json();
+  const v = e.videos[0];
+  assert.equal(v.etapa, 'agendado'); assert.equal(v.erro, null);
+  assert.equal(v.publicacao.contas.spc_tt.status, 'esperando'); assert.equal(v.publicacao.contas.spc_tt.postId, 'sp_1');
+  assert.equal(v.analise, null); // a ficha completa sai em videos[]: publicacao e analise (ainda vazia)
+  assert.deepEqual(lerJson(path.join(dados, 'config.json')).redes, ['spc_tt']);
+  assert.equal(pfm.posts.length, 1); assert.deepEqual(pfm.posts[0].social_accounts, ['spc_tt']); assert.equal(pfm.posts[0].external_id, `${id}:1`);
+  assert.ok(!JSON.stringify(e).includes(CHAVE_PFM));
+  assert.equal(e.salas.find(s => s.chave === 'postagem').estado, 'esperando');
+  assert.equal(e.salas.find(s => s.chave === 'analise').ativa, true);
+});
+
+test('aprovar com publicar sem nenhuma rede marcada é 409 e não grava as redes', { timeout: 30000 }, async t => {
+  await comPostForMe(t);
+  const { post, dados, id, estado } = await ateAprovacaoDoPostComPfm(t);
+  const r = await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [], quando: null } });
+  assert.equal(r.status, 409); assert.match((await r.json()).erro, /pelo menos uma rede/);
+  const cfg = lerJson(path.join(dados, 'config.json'));
+  assert.equal('redes' in cfg, false);
+  assert.equal((await estado()).videos[0].etapa, 'aprovacao-pacote');
+});
+
+test('aprovar sem publicar continua levando ao "Postar na mão" e não toca no Post for Me', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, ate, id } = await ateAprovacaoDoPostComPfm(t);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'aprovou' })).status, 200);
+  await ate(e => e.videos[0].etapa === 'pronto-pra-postar');
+  assert.equal(pfm.posts.length, 0);
+});
+
+test('cancelar o agendamento apaga o post no Post for Me e a ficha volta pra aprovação do post', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, ate, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  // fora de agendado: 409
+  const antes = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(antes.status, 409); assert.equal((await antes.json()).erro, 'Este vídeo não está agendado.');
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  assert.equal((await (await fetch(base + '/api/estado')).json()).videos[0].etapa, 'agendado');
+  assert.equal((await fetch(`${base}/api/videos/${id}/cancelar`, { method: 'POST' })).status, 403, 'sem x-oficina é recusado');
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 200);
+  const e = await ate(e => e.videos[0].etapa === 'aprovacao-pacote');
+  assert.equal(e.videos[0].publicacao, null);
+  const apagados = pfm.chamadas.filter(c => c.metodo === 'DELETE');
+  assert.deepEqual(apagados.map(c => c.caminho), ['/v1/social-posts/sp_1']); // um post só, mesmo com duas redes
+  // aprovar de novo depois de cancelar não repete o external_id
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  assert.equal(pfm.posts.length, 2); assert.equal(pfm.posts[1].external_id, `${id}:2`);
+});
+
+test('cancelar com o Post for Me fora do ar é 502 e a ficha continua agendada', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  await pfm.fechar();
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 502); assert.match((await r.json()).erro, /Não consegui falar com o Post for Me/);
+  const v = (await (await fetch(base + '/api/estado')).json()).videos[0];
+  assert.equal(v.etapa, 'agendado'); assert.equal(v.publicacao.contas.spc_tt.status, 'esperando');
+});
+
+test('cancelar um post que já saiu em alguma rede é 409 e não apaga nada', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  const store = app.orquestrador.store;
+  const f = store.carregar(id); f.publicacao.contas.spc_tt.status = 'publicado'; store.salvar(f);
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 409); assert.match((await r.json()).erro, /já saiu/);
+  assert.equal(pfm.chamadas.filter(c => c.metodo === 'DELETE').length, 0);
+});
+
+test('cancelar sem a chave do Post for Me guardada é 400 com o aviso pra conectar', { timeout: 30000 }, async t => {
+  await comPostForMe(t);
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  await fetch(base + '/api/conexoes/postForMe', { method: 'DELETE', headers: { 'x-oficina': '1' } });
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 400); assert.equal((await r.json()).erro, 'Conecte o Post for Me primeiro.');
+});
+
+test('eventos de sistema (publicou, ler-numeros, cancelou-agendamento) não vêm da página: 400 Ação desconhecida', { timeout: 30000 }, async t => {
+  const { post, id } = await ateAprovacaoDoPost(t);
+  for (const tipo of ['publicou', 'ler-numeros', 'cancelou-agendamento', 'concluiu']) {
+    const r = await post(`/api/videos/${id}/evento`, { tipo, resultados: [], marco: '48h' });
+    assert.equal(r.status, 400, tipo); assert.equal((await r.json()).erro, 'Ação desconhecida.', tipo);
+  }
+});
+
+test('Tentar de novo e Postar na mão numa rede que falhou passam pela página com a conta', { timeout: 40000 }, async t => {
+  const pfm = await comPostForMe(t, { modo: 'falha-youtube' });
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  await app.relogio.volta(); // o relógio confere o resultado: tiktok saiu, youtube falhou
+  const video = async () => (await (await fetch(base + '/api/estado')).json()).videos[0];
+  let v = await video();
+  assert.equal(v.etapa, 'aguardando-numeros'); assert.equal(v.publicacao.contas.spc_yt.status, 'falhou'); assert.equal(v.publicacao.contas.spc_tt.status, 'publicado');
+  // sem conta ou com uma rede que não falhou: 409
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'republicar' })).status, 409);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'republicar', conta: 'spc_tt' })).status, 409);
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'republicar', conta: 'spc_yt' })).status, 200);
+  await app.orquestrador.esperarOcioso();
+  v = await video();
+  assert.equal(v.etapa, 'agendado'); assert.equal(v.publicacao.contas.spc_yt.status, 'esperando'); assert.equal(v.publicacao.contas.spc_tt.status, 'publicado');
+  assert.equal(pfm.posts.length, 2); assert.deepEqual(pfm.posts[1].social_accounts, ['spc_yt']); assert.equal(pfm.posts[1].external_id, `${id}:2`);
+  await app.relogio.volta(); // falha de novo (o falso sempre falha o youtube)
+  assert.equal((await post(`/api/videos/${id}/evento`, { tipo: 'postar-na-mao', conta: 'spc_yt' })).status, 200);
+  v = await video();
+  assert.equal(v.publicacao.contas.spc_yt.status, 'manual'); assert.equal(v.etapa, 'aguardando-numeros');
+});
+
+test('Análise que adia por chave recusada liga o aviso "reconectar" na página, sem erro na ficha', { timeout: 20000 }, async t => {
+  const { app, estado, ate } = await subir(t, { runners: { analise: async () => ({ adiar: true, motivo: 'CHAVE' }) } });
+  assert.deepEqual((await estado()).avisos, { postForMe: null });
+  const store = app.orquestrador.store; fs.mkdirSync(store.pasta('x'));
+  store.salvar({ ...criarFicha({ id: 'x', porta: 'bruto', bruto: 'b.mp4', agora: 1 }), etapa: 'analise',
+    publicacao: { publicadoEm: '2026-11-15T12:00:00.000Z', contas: {} }, analise: { proxima: '48h', leituras: [] } });
+  app.orquestrador.acordar(); await app.orquestrador.esperarOcioso();
+  const e = await ate(e => e.avisos.postForMe === 'reconectar');
+  assert.equal(e.videos[0].etapa, 'aguardando-numeros'); assert.equal(e.videos[0].erro, null); assert.equal(e.videos[0].analise.leituras.length, 0);
+});
+
+test('GET /api/resumos/ultimo: 404 sem resumo; com resumo traz a semana e o texto; o estado e o contador da Análise acompanham', async t => {
+  const { base, estado, dados } = await subir(t);
+  const nada = await fetch(base + '/api/resumos/ultimo');
+  assert.equal(nada.status, 404); assert.match((await nada.json()).erro, /resumo/i);
+  const pasta = path.join(dados, 'cerebro', 'resumos'); fs.mkdirSync(pasta, { recursive: true });
+  const texto = '# Resumo da semana de 16/11\n\nTexto do resumo.';
+  fs.writeFileSync(path.join(pasta, '2026-11-16.md'), texto);
+  fs.writeFileSync(path.join(pasta, 'ultimo.json'), JSON.stringify({ semana: '2026-11-16' }));
+  const r = await fetch(base + '/api/resumos/ultimo');
+  assert.equal(r.status, 200); assert.deepEqual(await r.json(), { semana: '2026-11-16', texto });
+  const e = await estado();
+  assert.equal(e.resumo, '2026-11-16');
+  assert.equal(e.salas.find(s => s.chave === 'analise').contador, 1);
+});
+
+test('o relógio do servidor escreve o resumo da semana pelo Claude falso e a rota entrega', { timeout: 30000 }, async t => {
+  await comPostForMe(t);
+  const { post, app, base } = await subir(t, { relogio: { agora: () => new Date(2026, 10, 23, 8, 0) } });
+  const store = app.orquestrador.store; fs.mkdirSync(store.pasta('r1'));
+  store.salvar({ ...criarFicha({ id: 'r1', porta: 'bruto', bruto: 'b.mp4', agora: 1 }), etapa: 'concluido', tema: 'IA no varejo',
+    analise: { proxima: null, leituras: [{ marco: '7d', em: new Date(2026, 10, 18, 12).toISOString(), numeros: { porRede: {}, total: { visualizacoes: 10 } }, links: {}, resumo: 'ok', funcionou: [], melhorar: [], nota: 4 }] } });
+  assert.equal((await fetch(base + '/api/resumos/ultimo')).status, 404);
+  await conectarPostForMe(post); // sem a chave guardada o relógio nem sai de casa
+  await app.relogio.volta();
+  const r = await (await fetch(base + '/api/resumos/ultimo')).json();
+  assert.equal(r.semana, '2026-11-16'); assert.match(r.texto, /Post A/);
+});
+
+test('o relógio só anda depois de iniciar() e para em fechar(); criarServidor() sozinho não começa nada', async t => {
+  let voltas = 0;
+  const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-srv-'));
+  t.after(() => fs.rmSync(dados, { recursive: true, force: true }));
+  const config = loadConfig({ OFC_DATA: dados, PORT: '0', OFC_CLAUDE_COMMAND: process.execPath, OFC_CLAUDE_PREFIX_ARGS: JSON.stringify([FAKE]) });
+  const checagem = () => ({ ok: true, mensagem: null, itens: [] });
+  const app = criarServidor({ config, checagem, intervaloCaixa: 0, relogio: { cliente: () => { voltas++; return null; }, intervaloMs: 15 } });
+  t.after(() => app.fechar());
+  await new Promise(r => setTimeout(r, 80));
+  assert.equal(voltas, 0);
+  app.iniciar();
+  await new Promise(r => setTimeout(r, 120));
+  assert.ok(voltas >= 2, `voltas: ${voltas}`);
+  await app.fechar();
+  await new Promise(r => setTimeout(r, 40));
+  const parou = voltas;
+  await new Promise(r => setTimeout(r, 100));
+  assert.equal(voltas, parou);
+  // relogio: false nunca inicia
+  const sem = criarServidor({ config, checagem, intervaloCaixa: 0, relogio: false });
+  sem.iniciar(); await new Promise(r => setTimeout(r, 60)); await sem.fechar();
+  assert.equal(voltas, parou);
+});
+
+// Apaga no falso (como se tivesse sido apagado no painel do Post for Me) o post `postId`.
+const apagarNoFalso = postId => fetch(`${process.env.OFC_POSTFORME_URL}/v1/social-posts/${postId}`, { method: 'DELETE', headers: { authorization: `Bearer ${CHAVE_PFM}` } });
+
+test('cancelar um post que o Post for Me já não tem (404) conta como cancelado: a ficha volta pra aprovação do post', { timeout: 30000 }, async t => {
+  const pfm = await comPostForMe(t);
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  assert.equal((await apagarNoFalso('sp_1')).status, 200); // apagado direto no Post for Me
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 200);
+  assert.equal(pfm.chamadas.filter(c => c.metodo === 'DELETE').length, 2); // o do teste e o do cancelar (que levou 404)
+  const v = (await (await fetch(base + '/api/estado')).json()).videos[0];
+  assert.equal(v.etapa, 'aprovacao-pacote'); assert.equal(v.publicacao, null); assert.equal(v.erro, null);
+});
+
+test('cancelar com dois posts, o primeiro já apagado: apaga o segundo e a ficha volta pra aprovação do post', { timeout: 40000 }, async t => {
+  const pfm = await comPostForMe(t, { modo: 'falha-youtube' });
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT, YT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  await app.relogio.volta(); // tiktok saiu, youtube falhou
+  await post(`/api/videos/${id}/evento`, { tipo: 'republicar', conta: 'spc_yt' }); // segundo post (sp_2), spc_yt esperando
+  await app.orquestrador.esperarOcioso();
+  // agora: spc_tt publicado (sp_1) e spc_yt esperando (sp_2); com um publicado o cancelamento é recusado, então desfaz o publicado
+  const store = app.orquestrador.store;
+  const f = store.carregar(id); f.publicacao.contas.spc_tt = { ...f.publicacao.contas.spc_tt, status: 'esperando', postId: 'sp_1' }; store.salvar(f);
+  assert.equal((await apagarNoFalso('sp_1')).status, 200); // o primeiro já foi apagado lá
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 200);
+  assert.deepEqual(pfm.chamadas.filter(c => c.metodo === 'DELETE').map(c => c.caminho), ['/v1/social-posts/sp_1', '/v1/social-posts/sp_1', '/v1/social-posts/sp_2']);
+  const v = (await (await fetch(base + '/api/estado')).json()).videos[0];
+  assert.equal(v.etapa, 'aprovacao-pacote'); assert.equal(v.publicacao, null);
+});
+
+test('cancelar com outra recusa do Post for Me (não 404) continua sendo 502 com a ficha intacta', { timeout: 30000 }, async t => {
+  await comPostForMe(t);
+  const { post, app, id, base } = await ateAprovacaoDoPostComPfm(t);
+  await post(`/api/videos/${id}/evento`, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } });
+  await app.orquestrador.esperarOcioso();
+  // chave trocada por uma recusada: o DELETE volta 401 (CHAVE), que não é "post já apagado"
+  fs.writeFileSync(path.join(app.orquestrador.config.dados, 'config.json'), JSON.stringify({ postForMe: 'chave-que-o-falso-recusa-123', redes: ['spc_tt'] }));
+  const r = await post(`/api/videos/${id}/cancelar`);
+  assert.equal(r.status, 502); assert.match((await r.json()).erro, /chave do Post for Me não funcionou/);
+  assert.equal((await (await fetch(base + '/api/estado')).json()).videos[0].etapa, 'agendado');
 });

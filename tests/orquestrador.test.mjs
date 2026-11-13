@@ -5,17 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { FichasStore } from '../lib/fichas-store.mjs';
 import { Orquestrador } from '../lib/orquestrador.mjs';
-import { criarFicha } from '../lib/ficha.mjs';
+import { ExecutionLimiter } from '../lib/execution.mjs';
+import { criarFicha, aplicar } from '../lib/ficha.mjs';
 import { lerAprendizados } from '../lib/aprendizados.mjs';
 
 const FAKE = path.resolve('tests/fixtures/claude-falso.mjs');
 
 const PULAR = ['pesquisa', 'roteiro', 'capa', 'analise'];
-function montar(runners, config = {}) {
+function montar(runners, config = {}, extra = {}) {
   const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-orq-'));
   const store = new FichasStore(dados); store.garantirPastas();
   const nova = (id, etapa = 'bruto-recebido') => { fs.mkdirSync(store.pasta(id)); return store.salvar({ ...criarFicha({ id, porta: 'bruto', bruto: 'bruto.mp4', pular: PULAR, agora: 1 }), etapa }); };
-  const o = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners });
+  const o = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners, ...extra });
   return { store, o, nova };
 }
 
@@ -215,4 +216,97 @@ test('capa roda depois da exportação; refazer capa roda só a capa e ensina a 
   f = store.carregar('a');
   assert.equal(f.etapa, 'aprovacao-pacote'); assert.equal(f.capa.aviso, 'refeita'); assert.equal(capas, 2); assert.equal(posts, 1);
   assert.match(lerAprendizados(store.cerebroDir, 'capa'), /mais contraste/);
+});
+
+// ---------- Etapa 4: publicar e Análise ----------
+
+const TT = { id: 'spc_tt', plataforma: 'tiktok', usuario: '@teste' };
+// Ficha na aprovação do post, aprovada pra publicar: fica em `publicando`, com o registro do pedido.
+function publicando(store, id = 'p') {
+  fs.mkdirSync(store.pasta(id));
+  const base = { ...criarFicha({ id, porta: 'bruto', bruto: 'bruto.mp4', pular: PULAR, agora: 1 }), etapa: 'aprovacao-pacote', postagem: { legenda: 'Oi', hashtags: [], horario: null } };
+  return store.salvar(aplicar(base, { tipo: 'aprovou', publicar: { contas: [TT], quando: null } }));
+}
+const registro = (ficha, postId = 'sp_1') => ({ ...ficha.publicacao, tentativas: 1, postIds: [postId], pendentes: [],
+  contas: { spc_tt: { plataforma: 'tiktok', usuario: '@teste', status: 'esperando', postId, idNaRede: null, link: null, erro: null } } });
+const LEITURA_7D = { marco: '7d', em: '2026-11-22T12:00:00.000Z', numeros: { porRede: {}, total: {} }, links: {}, resumo: 'Foi bem.', funcionou: ['a'], melhorar: ['b'], nota: 4 };
+// Ficha já na etapa `analise`, esperando a leitura de `marco`.
+function naAnalise(store, id = 'n', marco = '7d') {
+  fs.mkdirSync(store.pasta(id));
+  return store.salvar({ ...criarFicha({ id, porta: 'bruto', bruto: 'bruto.mp4', pular: PULAR.filter(s => s !== 'analise'), agora: 1 }), etapa: 'analise',
+    publicacao: { publicadoEm: '2026-11-15T12:00:00.000Z', contas: {} }, analise: { proxima: marco, leituras: [] } });
+}
+
+test('publicando: o runner de publicar recebe a ficha e o registro volta pra ficha, que fica agendado', async () => {
+  let recebido;
+  const { store, o } = montar({ publicar: async args => { recebido = args; return registro(args.ficha); } });
+  publicando(store); o.acordar(); await o.esperarOcioso();
+  const f = store.carregar('p');
+  assert.equal(f.etapa, 'agendado'); assert.equal(f.erro, null);
+  assert.equal(f.publicacao.contas.spc_tt.status, 'esperando'); assert.equal(f.publicacao.tentativas, 1);
+  assert.equal(recebido.ficha.id, 'p'); assert.ok(recebido.signal instanceof AbortSignal); assert.ok(recebido.pastaVideo);
+});
+
+test('publicando: falha do runner marca erro na ficha e tentar-de-novo roda de novo', async () => {
+  let vezes = 0;
+  const { store, o } = montar({ publicar: async args => { vezes++; if (vezes === 1) throw new Error('Conecte o Post for Me'); return registro(args.ficha); } });
+  publicando(store); o.acordar(); await o.esperarOcioso();
+  let f = store.carregar('p'); assert.equal(f.etapa, 'publicando'); assert.match(f.erro.mensagem, /Conecte o Post for Me/);
+  o.evento('p', { tipo: 'tentar-de-novo' }); await o.esperarOcioso();
+  assert.equal(store.carregar('p').etapa, 'agendado'); assert.equal(vezes, 2);
+});
+
+test('publicando usa a fila da Postagem: dois envios nunca ao mesmo tempo', async () => {
+  let ativos = 0, maximo = 0;
+  const { store, o } = montar({ publicar: async args => { ativos++; maximo = Math.max(maximo, ativos); await new Promise(r => setTimeout(r, 30)); ativos--; return registro(args.ficha); } });
+  publicando(store, 'p1'); publicando(store, 'p2'); o.acordar(); await o.esperarOcioso();
+  assert.equal(maximo, 1); assert.equal(store.carregar('p1').etapa, 'agendado'); assert.equal(store.carregar('p2').etapa, 'agendado');
+});
+
+test('publicando: fechar a Oficina no meio do envio não marca erro; o retomar() continua', async () => {
+  let vezes = 0;
+  const { store, o } = montar({ publicar: async args => { vezes++; if (vezes === 1) await new Promise((_, rej) => args.signal.addEventListener('abort', () => rej(args.signal.reason), { once: true })); return registro(args.ficha); } });
+  publicando(store); o.acordar();
+  for (let i = 0; i < 100 && vezes === 0; i++) await new Promise(r => setTimeout(r, 10));
+  await o.pararTudo();
+  const f = store.carregar('p'); assert.equal(f.etapa, 'publicando'); assert.equal(f.erro, null);
+  const o2 = new Orquestrador({ store, config: {}, cerebroDir: store.cerebroDir, runners: { publicar: async args => registro(args.ficha) } });
+  o2.retomar(); await o2.esperarOcioso();
+  assert.equal(store.carregar('p').etapa, 'agendado');
+});
+
+test('analise: o runner recebe o cerebroDir; uma leitura de 7d conclui o vídeo', async () => {
+  let recebido;
+  const { store, o } = montar({ analise: async args => { recebido = args; return { leitura: LEITURA_7D }; } });
+  naAnalise(store); o.acordar(); await o.esperarOcioso();
+  const f = store.carregar('n');
+  assert.equal(f.etapa, 'concluido'); assert.equal(f.analise.leituras.length, 1); assert.equal(f.analise.leituras[0].marco, '7d');
+  assert.equal(recebido.cerebroDir, store.cerebroDir); assert.equal(recebido.ficha.id, 'n');
+});
+
+test('analise: { adiar: true } volta pra aguardando-numeros, sem leitura e sem erro; o aviso só liga quando a chave foi recusada', async () => {
+  const avisos = [];
+  const motivos = ['CHAVE', 'SEM_CONEXAO'];
+  const { store, o } = montar({ analise: async () => ({ adiar: true, motivo: motivos.shift() }) }, {}, { aoAdiar: m => avisos.push(m) });
+  naAnalise(store, 'a'); o.acordar(); await o.esperarOcioso();
+  let f = store.carregar('a');
+  assert.equal(f.etapa, 'aguardando-numeros'); assert.equal(f.analise.leituras.length, 0); assert.equal(f.erro, null);
+  naAnalise(store, 'b'); o.acordar(); await o.esperarOcioso();
+  assert.equal(store.carregar('b').etapa, 'aguardando-numeros');
+  assert.deepEqual(avisos, ['CHAVE', 'SEM_CONEXAO']);
+});
+
+test('analise: sem runner injetado usa a leitura de verdade, que sem chave do Post for Me adia sem erro', async () => {
+  const dados = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-orq-dados-'));
+  const motivos = [];
+  const { store, o } = montar({}, { dados }, { aoAdiar: m => motivos.push(m) });
+  naAnalise(store, 'a', '48h'); o.acordar(); await o.esperarOcioso();
+  const f = store.carregar('a');
+  assert.equal(f.etapa, 'aguardando-numeros'); assert.equal(f.erro, null); assert.equal(f.analise.leituras.length, 0);
+  assert.deepEqual(motivos, ['SEM_CHAVE']);
+});
+
+test('a Análise tem a sua própria fila de uma ficha por vez', () => {
+  const { o } = montar({});
+  assert.ok(o.limites.analise instanceof ExecutionLimiter); assert.notEqual(o.limites.analise, o.limites.postagem);
 });

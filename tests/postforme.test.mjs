@@ -225,3 +225,21 @@ test('o falso recusa qualquer rota sem a chave certa', async t => {
   assert.equal(pfm.posts.length, 0);
   assert.deepEqual(pfm.chamadas.map(c => c.comAutorizacao), [false, true]);
 });
+
+test('cancelar de um post que já não existe é RECUSADO com status 404 (quem chama decide o que fazer)', async t => {
+  const { cliente } = await cenario(t);
+  const c = cliente();
+  await assert.rejects(c.cancelar('sp_nao_existe'), e => { assert.ok(e instanceof ErroPostForMe); assert.equal(e.code, 'RECUSADO'); assert.equal(e.status, 404); return true; });
+  const { id } = await c.criarPost({ caption: 'oi', social_accounts: ['spc_tt'] });
+  await c.cancelar(id); // o vivo continua apagando normalmente
+  await assert.rejects(c.cancelar(id), { code: 'RECUSADO', status: 404 }); // apagar de novo: já foi
+});
+
+test('cancelar aceita um signal: tempo esgotado vira SEM_CONEXAO e parada própria não', async () => {
+  const lento = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+  const c = criarPostForMe({ chave: CHAVE_PFM, base: 'http://x', fetch: lento });
+  await assert.rejects(c.cancelar('sp_1', AbortSignal.timeout(20)), { code: 'SEM_CONEXAO' });
+  const ac = new AbortController(); const p = c.cancelar('sp_1', ac.signal);
+  ac.abort(new Error('fechou'));
+  await assert.rejects(p, e => { assert.ok(!(e instanceof ErroPostForMe)); assert.equal(e.message, 'fechou'); return true; });
+});

@@ -15,14 +15,22 @@ import { CaixaDeEntrada, EXTENSOES_VIDEO } from './lib/caixa-de-entrada.mjs';
 import { Orquestrador } from './lib/orquestrador.mjs';
 import { PaineisMaquina } from './lib/painel-maquina.mjs';
 import { checarFerramentas } from './lib/checagem.mjs';
-import { criarFicha } from './lib/ficha.mjs';
+import { criarFicha, aplicar } from './lib/ficha.mjs';
 import { lerCerebro, salvarPerfil } from './lib/cerebro.mjs';
-import { estadoConexoes, conectar, desconectar, SERVICOS } from './lib/conexoes.mjs';
+import { estadoConexoes, conectar, desconectar, chaveDe, redesPreferidas, salvarRedes, SERVICOS } from './lib/conexoes.mjs';
 import { criarHiggsfield } from './lib/higgsfield.mjs';
+import { criarPostForMe, ErroPostForMe } from './lib/postforme.mjs';
+import { criarRelogio } from './lib/relogio.mjs';
+import { escreverResumo, ultimoResumo, contarResumos } from './lib/resumo-da-semana.mjs';
 
-const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia', 'escolheu-capa']);
+// What the page may ask for. The system events (`publicou`, `ler-numeros`, `cancelou-agendamento`) are NOT here:
+// only the clock and the cancel route send them. Cancelling is the route POST /api/videos/:id/cancelar.
+const EVENTOS_DO_DONO = new Set(['aprovou', 'revisar', 'tentar-de-novo', 'postado', 'pular', 'escolheu-referencia', 'escolheu-capa', 'republicar', 'postar-na-mao']);
 // How each connection checks a key before saving it.
-const TESTAR_CHAVE = { higgsfield: chave => criarHiggsfield({ chave }).testar() };
+const TESTAR_CHAVE = { higgsfield: chave => criarHiggsfield({ chave }).testar(), postForMe: chave => criarPostForMe({ chave }).testar() };
+const SEM_CHAVE_POSTFORME = 'Conecte o Post for Me primeiro.';
+// A Post for Me call that hangs must not hold a page request forever (the client reads a timeout as "no connection").
+const TEMPO_CHAMADA_MS = 30_000;
 const LIMITE_IDEIA = 300;
 const versao = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
@@ -30,11 +38,21 @@ async function responde(url) {
   try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); return r.status < 500; } catch { return false; }
 }
 
-export function criarServidor({ config = loadConfig(), salas = carregarSalas(), checagem = null, runners, painelScript = null, intervaloCaixa = 2000 } = {}) {
+// relogio: `false` = the clock never starts (tests); an object = options for criarRelogio (interval, clock, client...).
+export function criarServidor({ config = loadConfig(), salas = carregarSalas(), checagem = null, runners, painelScript = null, intervaloCaixa = 2000, relogio: relogioOpcoes } = {}) {
   const store = new FichasStore(config.dados); store.garantirPastas();
   const checar = checagem || (() => checarFerramentas({ skillsDir: config.skillsDir, maquinaDir: config.maquinaDir, claude: config.claude }));
   let ultimaChecagem = { ok: true, mensagem: null, itens: [], conferindo: true };
-  const orquestrador = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners });
+  // A reading postponed because Post for Me refused the key raises the "reconnect" notice (the relógio clears it after a good lap).
+  const orquestrador = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners, aoAdiar: motivo => { if (motivo === 'CHAVE') relogio.sinalizarChaveRecusada(); } });
+  // The weekly summary runs on the Análise room's queue (one Claude at a time there), with the signal of the clock lap that asked for it.
+  let resumoEmAndamento = null;
+  const resumir = (semana, signal) => {
+    const p = orquestrador.limites.analise.run(() => escreverResumo({ cerebroDir: store.cerebroDir, fichas: store.listar(), semana, config, signal }), signal);
+    resumoEmAndamento = p.catch(() => {}); // fechar() waits for the Claude child of the summary too
+    return p;
+  };
+  const relogio = criarRelogio({ store, orquestrador, config, cerebroDir: store.cerebroDir, resumir, ...(relogioOpcoes || {}) });
   const caixa = new CaixaDeEntrada({ store, pular: salasInativas(salas), aoCriar: () => orquestrador.acordar() });
   const paineis = new PaineisMaquina({ skillsDir: config.skillsDir, script: painelScript });
   // Trabalho em segundo plano só começa em iniciar(), depois que a porta foi aberta (uma segunda instância não pode retomar nada)
@@ -42,6 +60,7 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
     ultimaChecagem = checar();
     if (intervaloCaixa) caixa.iniciar(intervaloCaixa);
     orquestrador.retomar();
+    if (relogioOpcoes !== false) relogio.iniciar();
   };
 
   const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -108,8 +127,20 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
       if (req.method === 'GET' && url.pathname === '/api/estado') {
         const fichas = store.listar();
         const videos = fichas.map(f => ({ ...f, andamento: orquestrador.andamento(f.id), painelUrl: paineis.aberto(f.id), trabalhando: orquestrador.ocupado(f.id) }));
-        return json(res, 200, { versao, salas: resumoDasSalas(salas, fichas, ultimaChecagem), videos, checagem: ultimaChecagem,
-          cerebro: { preenchido: lerCerebro(store.cerebroDir).preenchido }, conexoes: estadoConexoes(config.dados) });
+        return json(res, 200, { versao, salas: resumoDasSalas(salas, fichas, ultimaChecagem, { resumos: contarResumos(store.cerebroDir) }), videos, checagem: ultimaChecagem,
+          cerebro: { preenchido: lerCerebro(store.cerebroDir).preenchido }, conexoes: estadoConexoes(config.dados),
+          avisos: relogio.avisos(), resumo: ultimoResumo(store.cerebroDir)?.semana || null });
+      }
+      // The student's connected accounts (and the networks ticked last time). The key never leaves the server.
+      if (req.method === 'GET' && url.pathname === '/api/postforme/contas') {
+        const chave = chaveDe(config.dados, 'postForMe');
+        if (!chave) return json(res, 400, { erro: SEM_CHAVE_POSTFORME });
+        try { return json(res, 200, { contas: await criarPostForMe({ chave }).contas(AbortSignal.timeout(TEMPO_CHAMADA_MS)), redes: redesPreferidas(config.dados) }); }
+        catch (e) { return json(res, 502, { erro: e.message }); }
+      }
+      if (req.method === 'GET' && url.pathname === '/api/resumos/ultimo') {
+        const resumo = ultimoResumo(store.cerebroDir);
+        return resumo ? json(res, 200, resumo) : json(res, 404, { erro: 'Ainda não tem resumo da semana.' });
       }
       if (req.method === 'POST' && url.pathname === '/api/conexoes') {
         let dados; try { dados = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
@@ -159,7 +190,7 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
         orquestrador.acordar();
         return json(res, 200, ficha);
       }
-      const m = url.pathname.match(/^\/api\/videos\/([^/]+)\/(painel|evento|studio|bruto|final\.mp4)$/);
+      const m = url.pathname.match(/^\/api\/videos\/([^/]+)\/(painel|evento|studio|bruto|cancelar|final\.mp4)$/);
       if (m) {
         let id; try { id = decodeURIComponent(m[1]); } catch { return json(res, 404, { erro: 'Vídeo não encontrado.' }); }
         const ficha = store.idValido(id) ? store.carregar(id) : null;
@@ -203,10 +234,36 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
           try { const f = await orquestrador.reabrirStudio(id); return json(res, 200, { url: f.edicao.studioUrl }); }
           catch (e) { return json(res, 409, { erro: `Não consegui abrir o Studio: ${e.message}` }); }
         }
+        if (m[2] === 'cancelar') {
+          if (ficha.etapa !== 'agendado') return json(res, 409, { erro: 'Este vídeo não está agendado.' });
+          if (orquestrador.ocupado(id)) return json(res, 409, { erro: 'A sala ainda está trabalhando neste vídeo. Espere terminar.' });
+          // The ficha's own rules first (e.g. "já saiu em alguma rede"): nothing is deleted at Post for Me if the ficha would refuse.
+          try { aplicar(ficha, { tipo: 'cancelou-agendamento' }); } catch (e) { return json(res, 409, { erro: e.message }); }
+          const chave = chaveDe(config.dados, 'postForMe');
+          if (!chave) return json(res, 400, { erro: SEM_CHAVE_POSTFORME });
+          const cliente = criarPostForMe({ chave });
+          const postIds = [...new Set(Object.values(ficha.publicacao?.contas || {}).filter(c => c.status === 'esperando' && c.postId).map(c => c.postId))];
+          // A post Post for Me no longer has (404: deleted there, or by an earlier cancel that stopped halfway) is already cancelled.
+          // Any other failure leaves the ficha as it was: the student can try again.
+          try {
+            for (const postId of postIds) {
+              try { await cliente.cancelar(postId, AbortSignal.timeout(TEMPO_CHAMADA_MS)); }
+              catch (e) { if (!(e instanceof ErroPostForMe && e.status === 404)) throw e; }
+            }
+          } catch (e) { return json(res, 502, { erro: e.message }); }
+          try { return json(res, 200, orquestrador.evento(id, { tipo: 'cancelou-agendamento' })); }
+          catch (e) { return json(res, 409, { erro: e.message }); }
+        }
         let ev; try { ev = await corpo(req); } catch (e) { return json(res, e.status || 400, { erro: e.message }); }
         if (!EVENTOS_DO_DONO.has(ev.tipo)) return json(res, 400, { erro: 'Ação desconhecida.' });
-        try { return json(res, 200, orquestrador.evento(id, { tipo: ev.tipo, texto: ev.texto, sala: ev.sala, indice: ev.indice })); }
-        catch (e) { return json(res, 409, { erro: e.message }); }
+        try {
+          const nova = orquestrador.evento(id, { tipo: ev.tipo, texto: ev.texto, sala: ev.sala, indice: ev.indice, publicar: ev.publicar, conta: ev.conta });
+          // Approving the post for publishing: the ticked networks are the starting point of the next video.
+          if (ev.tipo === 'aprovou' && nova.etapa === 'publicando') {
+            try { salvarRedes(config.dados, (nova.publicacao?.pedido?.contas || []).map(c => c.id)); } catch (e) { console.error('redes:', e.message); }
+          }
+          return json(res, 200, nova);
+        } catch (e) { return json(res, 409, { erro: e.message }); }
       }
       return json(res, 404, { erro: 'Não encontrado.' });
     } catch (e) { console.error(e); return json(res, 500, { erro: e.message }); }
@@ -214,10 +271,11 @@ export function criarServidor({ config = loadConfig(), salas = carregarSalas(), 
   // Para as edições em andamento (o Claude filho não fica órfão) sem marcar erro: o retomar() da próxima abertura continua.
   // Devolve uma promessa que resolve quando os filhos terminaram (ou depois de alguns segundos).
   const fechar = () => {
+    relogio.parar(); // also aborts the lap in progress (and the weekly summary it may be running)
     caixa.parar(); paineis.fecharTodos(); server.close(); server.closeAllConnections?.();
-    return orquestrador.pararTudo();
+    return Promise.all([orquestrador.pararTudo(), resumoEmAndamento]).then(() => {});
   };
-  return { server, orquestrador, caixa, paineis, iniciar, fechar };
+  return { server, orquestrador, caixa, paineis, relogio, iniciar, fechar };
 }
 
 function abrirNavegador(url) {
