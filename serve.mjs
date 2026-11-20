@@ -15,6 +15,7 @@ import { CaixaDeEntrada, EXTENSOES_VIDEO } from './lib/caixa-de-entrada.mjs';
 import { Orquestrador } from './lib/orquestrador.mjs';
 import { PaineisMaquina } from './lib/painel-maquina.mjs';
 import { checarFerramentas } from './lib/checagem.mjs';
+import { agenteDaChecagem } from './lib/agente-runner.mjs';
 import { criarFicha, aplicar, podeCancelar } from './lib/ficha.mjs';
 import { conferirLimites, conferirVideo, legendaDoPost } from './lib/publicar.mjs';
 import { lerCerebro, salvarPerfil } from './lib/cerebro.mjs';
@@ -42,7 +43,7 @@ async function responde(url) {
 // relogio: `false` = the clock never starts (tests); an object = options for criarRelogio (interval, clock, client...).
 export function criarServidor({ config = loadConfig(), salas = carregarSalas(), checagem = null, runners, painelScript = null, intervaloCaixa = 2000, relogio: relogioOpcoes } = {}) {
   const store = new FichasStore(config.dados); store.garantirPastas();
-  const checar = checagem || (() => checarFerramentas({ skillsDir: config.skillsDir, maquinaDir: config.maquinaDir, claude: config.claude }));
+  const checar = checagem || (() => checarFerramentas({ skillsDir: config.skillsDir, maquinaDir: config.maquinaDir, claude: config.claude, agente: agenteDaChecagem(config) }));
   let ultimaChecagem = { ok: true, mensagem: null, itens: [], conferindo: true };
   // A reading postponed because Post for Me refused the key raises the "reconnect" notice (the relógio clears it after a good lap).
   const orquestrador = new Orquestrador({ store, config, cerebroDir: store.cerebroDir, runners, aoAdiar: motivo => { if (motivo === 'CHAVE') relogio.sinalizarChaveRecusada(); } });

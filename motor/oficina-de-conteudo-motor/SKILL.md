@@ -1,6 +1,6 @@
 ---
 name: oficina-de-conteudo-motor
-description: Motor de edição interno da Oficina de Conteúdo com IA (cópia da Máquina de Edição com o modo escritório). Só a sala de Edição da Oficina chama esta skill, com /oficina-de-conteudo-motor <COMANDO>. Não use pra pedidos de edição no chat: pra isso existe a skill maquina-de-edicao.
+description: Motor de edição interno da Oficina de Conteúdo com IA (cópia da Máquina de Edição com o modo escritório). Só a sala de Edição da Oficina chama esta skill, com /oficina-de-conteudo-motor seguido do comando. Não use pra pedidos de edição no chat, porque pra isso existe a skill maquina-de-edicao.
 ---
 
 # Máquina de Edição

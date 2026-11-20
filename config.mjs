@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { idDoMotor } from './lib/motores.mjs';
 
 export const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // O motor de edição vem dentro da Oficina (pasta motor/) e é instalado como skill com este nome.
@@ -19,6 +20,12 @@ export function loadConfig(env = process.env) {
     dados,
     claude: { command: env.OFC_CLAUDE_COMMAND || 'claude', prefixArgs: JSON.parse(env.OFC_CLAUDE_PREFIX_ARGS || '[]') },
     modeloEdicao: local.modeloEdicao || null,
+    // Which agent drives the rooms: claude (default), codex or opencode. See lib/motores.mjs.
+    motor: idDoMotor(env.OFC_MOTOR || local.motor),
+    // Command of the chosen agent when it is not Claude Code. null = find the real program on this computer.
+    agente: { command: env.OFC_AGENTE_COMMAND || null, prefixArgs: JSON.parse(env.OFC_AGENTE_PREFIX_ARGS || '[]') },
+    // Model for the chosen agent when it is not Claude Code. null = the agent's own default.
+    modelo: local.modelo || null,
     skillsDir: env.OFC_SKILLS ? path.resolve(env.OFC_SKILLS) : path.join(os.homedir(), '.claude', 'skills'),
     maquinaDir: path.join(os.homedir(), '.maquina-de-edicao'),
   };

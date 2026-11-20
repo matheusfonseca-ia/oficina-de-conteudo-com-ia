@@ -17,7 +17,7 @@ Você pode começar de dois jeitos. **Tenho uma ideia**: a Pesquisa traz referê
 
 - **Máquina de Edição com IA Básico** instalada. Os formatos, os efeitos sonoros e os efeitos de vídeo vêm dela; com o Completo instalado, os formatos dele também aparecem. A Oficina traz o próprio motor de edição, então não é preciso mexer na Máquina.
 - **Node.js 22.13 ou mais novo**
-- **Claude Code** instalado e com login feito
+- **Um agente de IA** instalado e com login feito: o **Claude Code** (recomendado, é onde a Oficina foi testada), o **Codex** ou o **OpenCode**. Veja "Usar outro agente" mais abaixo
 - **Google Chrome** ou **Microsoft Edge**: a sala de Capa usa o navegador pra montar a imagem da capa
 - **Post for Me** (opcional): só pra publicar daqui e pra Análise ler os números. Veja em Conexões.
 
@@ -39,6 +39,22 @@ O instalador confere tudo, prepara a Oficina e instala no seu Claude Code o coma
 5. Aprove a legenda. Com o Post for Me conectado, marque as redes e clique em **Publicar** (agora) ou em **Agendar**. Sem ele, copie o texto, baixe o vídeo e poste na mão.
 
 Se preferir, também dá pra abrir sem o Claude Code: `npm start` dentro da pasta.
+
+## Usar outro agente (Codex ou OpenCode)
+
+A Oficina usa o Claude Code por padrão. Pra trocar, crie (ou edite) o arquivo `config.json` dentro de `~/.oficina-de-conteudo` com o agente escolhido e abra a Oficina de novo:
+
+```json
+{ "motor": "codex" }
+```
+
+Os valores aceitos são `claude`, `codex` e `opencode`. Pra escolher o modelo desse agente, some `"modelo"` com o nome que o próprio agente usa (ex: `{ "motor": "opencode", "modelo": "provedor/nome-do-modelo" }`); sem ele, vale o modelo padrão do agente.
+
+- **Codex**: abre a Oficina com `$oficina-de-conteudo` no chat, ou com `npm start` nesta pasta.
+- **OpenCode**: abre com `@oficina-de-conteudo` no chat, ou com `npm start`.
+- **Freebuff**: a Máquina de Edição funciona nele pelo chat, mas a Oficina não, porque o Freebuff não tem um jeito de ser chamado por outro programa.
+
+A qualidade da edição depende do modelo. A Oficina foi criada e testada no Claude Code; com outros agentes, comece por um vídeo curto pra ver como fica.
 
 ## Onde ficam os seus dados
 

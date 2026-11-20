@@ -11,7 +11,9 @@ node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a
 if ($LASTEXITCODE -ne 0) { Write-Host 'Seu Node é antigo. Precisa da versão 22.13 ou mais nova.'; exit 1 }
 # A Oficina chama o claude sem shell: só o claude.exe do instalador oficial funciona (o claude.cmd do npm não).
 $claudeExe = Get-Command claude -CommandType Application -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -like '*.exe' } | Select-Object -First 1
-if (-not $claudeExe) { Write-Host 'A Oficina precisa do Claude Code instalado pelo instalador oficial (claude.exe). Instale em https://claude.com/claude-code e faça login.'; exit 1 }
+# Sem o Claude Code, a Oficina também roda com o Codex ou o OpenCode (escolha em config.json: "motor").
+$outroAgente = Get-Command codex, opencode -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $claudeExe -and -not $outroAgente) { Write-Host 'A Oficina precisa de um agente instalado: o Claude Code pelo instalador oficial (claude.exe, em https://claude.com/claude-code), o Codex ou o OpenCode. Instale um deles, faça login e rode este instalador de novo.'; exit 1 }
 
 Push-Location $pasta
 try {
@@ -33,5 +35,12 @@ try {
     if (Test-Path $destino) { New-Item -ItemType Directory -Force $backup | Out-Null; Move-Item $destino $backup }
     Copy-Item -Recurse (Join-Path $pasta $item[0]) $destino
   }
+  # O Codex lê as skills de ~/.agents/skills: a skill que abre a Oficina vai pra lá também (o motor não, ele é chamado pelo caminho).
+  $agentes = Join-Path $HOME '.agents\skills'
+  New-Item -ItemType Directory -Force $agentes | Out-Null
+  $destino = Join-Path $agentes 'oficina-de-conteudo'
+  if (Test-Path $destino) { $guarda = Join-Path $HOME ('.agents\skills-backup\' + (Split-Path -Leaf $backup)); New-Item -ItemType Directory -Force $guarda | Out-Null; Move-Item $destino $guarda }
+  Copy-Item -Recurse (Join-Path $pasta 'skill\oficina-de-conteudo') $destino
 } finally { Pop-Location }
 Write-Host 'Pronto! Feche e abra o Claude Code e chame /oficina-de-conteudo (ou rode: npm start, nesta pasta).'
+if (-not $claudeExe) { Write-Host ('Sem o Claude Code: abra com "npm start" nesta pasta e escolha o agente em ' + (Join-Path $dados 'config.json') + ', com "motor": "codex" ou "motor": "opencode".') }
